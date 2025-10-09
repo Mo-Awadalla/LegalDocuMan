@@ -46,7 +46,7 @@ A unified Python application for intelligent document processing with **advanced
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/DocumentProcessingSuite.git
+   git clone https://github.com/[your-username]/DocumentProcessingSuite.git
    cd DocumentProcessingSuite
    ```
 

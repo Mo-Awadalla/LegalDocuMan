@@ -31,7 +31,7 @@ git add .
 git commit -m "Initial commit: Document Processing Suite v2.0"
 
 # Add remote origin (replace with your GitHub URL)
-git remote add origin https://github.com/yourusername/DocumentProcessingSuite.git
+git remote add origin https://github.com/[your-username]/DocumentProcessingSuite.git
 
 # Push to GitHub
 git push -u origin main

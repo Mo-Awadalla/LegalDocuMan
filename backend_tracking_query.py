@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Backend Tracking Query Tool for Sonja
+Backend Tracking Query Tool
 Query expiration dates and retention information for record destruction scheduling
 """
 import json
@@ -66,7 +66,7 @@ def query_by_retention_category(registry, category=None):
         return registry['expiration_tracking']
 
 def generate_excel_report(registry, output_path=None):
-    """Generate Excel report for Sonja's backend tracking"""
+    """Generate Excel report for backend tracking"""
     if not registry:
         return None
     
@@ -94,7 +94,7 @@ def generate_excel_report(registry, output_path=None):
                          else 'NO_EXPIRATION'
         )
         
-        # Reorder columns for Sonja's use
+        # Reorder columns for backend use
         column_order = [
             'tracking_id', 'vendor', 'document_type', 'filename', 
             'expiration_date', 'days_until_expiration', 'expiration_status',
@@ -156,7 +156,7 @@ def print_summary(registry):
 def main():
     """Main function for command-line usage"""
     if len(sys.argv) < 2:
-        print("Backend Tracking Query Tool for Sonja")
+        print("Backend Tracking Query Tool")
         print("Usage: python backend_tracking_query.py <folder_path> [options]")
         print("\nOptions:")
         print("  --summary                Show summary information")

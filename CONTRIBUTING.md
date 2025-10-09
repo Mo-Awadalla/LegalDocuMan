@@ -41,7 +41,7 @@ Thank you for your interest in contributing to the Document Processing Suite! Th
 
 1. **Fork and clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/DocumentProcessingSuite.git
+   git clone https://github.com/[your-username]/DocumentProcessingSuite.git
    cd DocumentProcessingSuite
    ```
 

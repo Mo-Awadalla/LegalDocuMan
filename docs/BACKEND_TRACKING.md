@@ -1,11 +1,11 @@
 # Backend Tracking System for Record Management
 
 ## Overview
-This system captures expiration dates and retention information for Sonja's backend record destruction scheduling.
+This system captures expiration dates and retention information for backend record destruction scheduling.
 
 ## Key Features
 
-### ✅ Expiration Date Handling (per Sonja's Requirements)
+### ✅ Expiration Date Handling (per Requirements)
 - **Expiration dates are captured in METADATA only**
 - **NOT included in filenames** (keeps filenames clean)
 - **Comprehensive extraction patterns** for various legal language

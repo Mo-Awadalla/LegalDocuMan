@@ -28,7 +28,7 @@ If you don't have Python installed:
 
 1. **Clone or download** the repository:
    ```bash
-   git clone https://github.com/yourusername/DocumentProcessingSuite.git
+   git clone https://github.com/[your-username]/DocumentProcessingSuite.git
    cd DocumentProcessingSuite
    ```
 
@@ -288,4 +288,4 @@ After successful installation:
 
 ---
 
-**Need help?** Check the [GitHub Issues](https://github.com/yourusername/DocumentProcessingSuite/issues) or create a new issue with your system information.
+**Need help?** Check the [GitHub Issues](https://github.com/[your-username]/DocumentProcessingSuite/issues) or create a new issue with your system information.

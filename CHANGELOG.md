@@ -100,4 +100,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-For more information about changes, see the [GitHub releases](https://github.com/yourusername/DocumentProcessingSuite/releases).
+For more information about changes, see the [GitHub releases](https://github.com/[your-username]/DocumentProcessingSuite/releases).
