@@ -1,0 +1,48 @@
+# Document Processing Suite Requirements
+# ==========================================
+
+# Core document processing dependencies
+pdfplumber>=0.10.0,<1.0.0         # Superior PDF text extraction
+python-docx>=0.8.11,<2.0.0        # Microsoft Word document processing
+pandas>=1.3.0,<3.0.0              # Data manipulation and Excel export
+openpyxl>=3.0.9,<4.0.0            # Excel file handling (.xlsx)
+dateparser>=1.1.0,<2.0.0          # Intelligent date parsing
+
+# GUI dependencies (tkinter included with Python)
+# No additional GUI packages needed - using built-in tkinter
+
+# Optional OCR dependencies for scanned documents
+# Uncomment these lines to enable OCR functionality:
+# pytesseract>=0.3.10,<1.0.0      # OCR text recognition
+# pdf2image>=2.1.0,<4.0.0         # PDF to image conversion for OCR
+# Pillow>=9.0.0,<11.0.0           # Image processing support
+
+# Development and testing (optional)
+# Uncomment for development work:
+# pytest>=7.0.0,<8.0.0            # Testing framework
+# black>=22.0.0,<24.0.0           # Code formatting
+# flake8>=4.0.0,<7.0.0            # Code linting
+
+# Performance optimization (optional)
+# Uncomment for better performance with large files:
+# numba>=0.56.0,<1.0.0            # JIT compilation for speed
+# lxml>=4.6.0,<5.0.0              # Faster XML processing
+
+# System Requirements:
+# - Python 3.7+ (recommended: Python 3.9+)
+# - Windows/macOS/Linux compatible
+# 
+# For OCR functionality (if enabled):
+# - Tesseract-OCR: https://github.com/UB-Mannheim/tesseract/wiki
+# - Poppler (for pdf2image): 
+#   * Windows: Download poppler binaries
+#   * macOS: brew install poppler
+#   * Linux: apt-get install poppler-utils
+#
+# Installation:
+# pip install -r requirements.txt
+#
+# For OCR support:
+# 1. Uncomment OCR lines above
+# 2. Install system dependencies (Tesseract, Poppler)
+# 3. pip install -r requirements.txt 
