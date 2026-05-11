@@ -11,7 +11,7 @@ from pathlib import Path
 import json
 
 # Import our unified processor
-from document_processor import DocumentProcessor, process_contracts_simple, process_contracts_enhanced, sort_files_by_year
+from legaldocuman import DocumentProcessor
 
 class RedirectText:
     """Redirect stdout/stderr to GUI text widget"""
