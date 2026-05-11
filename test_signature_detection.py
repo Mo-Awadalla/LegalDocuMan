@@ -3,7 +3,7 @@
 Test Signature Detection System
 Verify that the signature detection patterns work correctly
 """
-from document_processor import DocumentStatusClassifier
+from legaldocuman import DocumentStatusClassifier
 
 def test_signature_samples():
     """Test signature detection with sample text"""
