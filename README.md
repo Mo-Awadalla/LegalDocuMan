@@ -1,214 +1,156 @@
-# Document Processing Suite
+# LegalDocuMan
 
-A unified Python application for intelligent document processing with **advanced signature detection**, contract renaming, and file organization.
+Intelligent document processing for contracts, agreements, and legal documents. Extracts text, classifies document types, detects signatures, and organizes files automatically.
 
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
+## Features
 
-## 🎯 Key Features
+- **Document Classification** — auto-detects MSA, SOW, NDA, PO, Amendment, License
+- **Signature Detection** — keyword-based scanning for digital, physical, and e-signature platforms
+- **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
+- **Folder Organization** — `_final` (signed) vs `_supporting` (unsigned)
+- **Date Extraction** — effective, expiration, renewal, and review dates from content
+- **Vendor Matching** — fuzzy match against a master vendor list
+- **Pluggable OCR Backends** — Tesseract (default) or NVIDIA (NeMo / Triton / TAO)
+- **Backend Tracking** — JSON registry with expiration tracking and retention categories
 
-### ✨ **Advanced Signature Detection**
-- **Targeted keyword-based approach** - First identifies signature sections, then searches within those areas
-- **Comprehensive signature patterns** - Digital, physical, e-signature platforms, legal execution language
-- **Smart classification** - Only truly signed documents go to `_final`, everything else to `_supporting`
-- **10-50x faster processing** compared to scanning entire documents
+## Install
 
-### 📄 **Contract Processing**
-- **Smart document classification** (MSA, SOW, NDA, Purchase Orders, etc.)
-- **Intelligent naming conventions**:
-  - Simple: `YYYYMMDD_Vendor_OriginalFile.pdf`
-  - Enhanced: `K_AcmeCorp_serviceAgreement_001.pdf`
-- **Simplified folder organization** with `_final` (signed only) and `_supporting` (everything else)
-- **Vendor name standardization** and master list matching
-- **Date extraction** from document content and filenames
-- **OCR support** for scanned documents
-- **Metadata generation** for contract tracking
-
-### 🗂️ **File Sorter**
-- **Intelligent date detection** from document content
-- **Archive old files** while preserving folder structure
-- **Configurable year thresholds**
-- **Excel reporting** of all operations
-
-### ⚙️ **Additional Features**
-- **Multi-format support**: PDF, DOCX, DOC, TXT files
-- **Error handling** with dedicated error folders
-- **Progress tracking** and detailed logging
-- **Configuration persistence**
-- **Threaded processing** for responsive GUI
-- **Backend tracking system** for record management and destruction scheduling
-- **Expiration date tracking** in metadata (NOT in filenames)
-
-## 🚀 Quick Start
-
-### Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/[your-username]/DocumentProcessingSuite.git
-   cd DocumentProcessingSuite
-   ```
-
-2. **Install Python dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Optional: Install OCR support** (for scanned documents):
-   ```bash
-   pip install pytesseract pdf2image Pillow
-   ```
-   
-   Then install [Tesseract-OCR](https://github.com/UB-Mannheim/tesseract/wiki) on your system.
-
-### Usage
-
-**Run the GUI application**:
 ```bash
-python run.py
+git clone https://github.com/Mo-Awadalla/LegalDocuMan.git
+cd LegalDocuMan
+pip install -r requirements.txt
 ```
 
-**Command line usage**:
+### Optional: OCR support
+
+**Tesseract (local, free):**
+```bash
+# macOS
+brew install tesseract poppler
+
+# Ubuntu/Debian
+sudo apt-get install tesseract-ocr poppler-utils
+
+# Then uncomment OCR lines in requirements.txt and reinstall
+pip install pytesseract pdf2image Pillow
+```
+
+**NVIDIA OCR (API-based):**
+```bash
+# 1. Uncomment requests in requirements.txt
+# 2. Set your API key in .env
+pip install -r requirements.txt
+```
+
+## Configuration
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OCR_BACKEND` | `tesseract` | `tesseract` or `nvidia` |
+| `NVIDIA_API_KEY` | — | Your NVIDIA API key |
+| `NVIDIA_API_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA API endpoint |
+| `NVIDIA_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | Model identifier |
+| `TESSERACT_PATH` | auto-detect | Override Tesseract binary path |
+| `POPLER_PATH` | auto-detect | Override Poppler binary path |
+
+`.env` is gitignored — never commit it.
+
+## Usage
+
 ```python
-from document_processor import process_contracts_enhanced, sort_files_by_year
+from legaldocuman import DocumentProcessor
 
-# Enhanced contract processing
-process_contracts_enhanced("C:/path/to/contracts", vendor_master_list=["Vendor1", "Vendor2"])
-
-# Simple contract processing  
-process_contracts_simple("C:/path/to/contracts")
-
-# Sort files by year
-sort_files_by_year("C:/source", "C:/pre2017_archive")
+processor = DocumentProcessor("/path/to/contracts")
+processor.process_contracts_enhanced()
+processor.print_summary()
 ```
 
-## 📁 Project Structure
+### With NVIDIA OCR
 
-```
-DocumentProcessingSuite/
-├── document_processor.py          # Main processing engine
-├── document_processor_gui.py      # Unified GUI application
-├── backend_tracking_query.py     # Backend tracking tool
-├── test_signature_detection.py   # Test suite
-├── utils.py                       # Helper utilities
-├── run.py                         # Application launcher
-├── requirements.txt               # Dependencies
-├── README.md                      # This file
-└── docs/                          # Documentation
-    └── BACKEND_TRACKING.md        # Backend tracking documentation
+```python
+from legaldocuman import DocumentProcessor
+from legaldocuman.backends import NvidiaOCRBackend
+
+ocr = NvidiaOCRBackend()
+processor = DocumentProcessor("/path/to/contracts", ocr_backend=ocr)
+processor.process_contracts_enhanced()
 ```
 
-## 🎯 Document Types Supported
-
-The system automatically detects and classifies:
-- **MSA** - Master Service Agreements
-- **SOW** - Statements of Work  
-- **NDA** - Non-Disclosure Agreements
-- **PO** - Purchase Orders
-- **AMD** - Amendments
-- **LICENSE** - License Agreements
-- **CONTRACT** - General Contracts
-
-## 📂 Folder Organization
-
-### Enhanced Mode
-Creates organized structure:
-```
-VendorName/
-├── VendorName_final/          # Signed, executed contracts only
-└── VendorName_supporting/     # All unsigned documents (drafts, exhibits, etc.)
-```
-
-### Naming Conventions
-- **Enhanced**: `K_VendorName_documentType_001.pdf`
-- **Simple**: `20231201_VendorName_OriginalFile.pdf`
-
-## 🔧 Configuration
-
-The application saves your settings automatically in:
-- Windows: `%USERPROFILE%/Documents/DocumentProcessorLogs/config.json`
-- Logs saved to: `%USERPROFILE%/Documents/DocumentProcessorLogs/`
-
-## 📊 Backend Tracking System
-
-### Query Backend Tracking Data
+Or set the env var:
 ```bash
-# Show summary of all tracked documents
-python backend_tracking_query.py "C:/processed_contracts" --summary
-
-# Show documents expiring in next 6 months  
-python backend_tracking_query.py "C:/processed_contracts" --expiring 6
-
-# Generate Excel report for backend processing
-python backend_tracking_query.py "C:/processed_contracts" --excel tracking_report.xlsx
-
-# Query by retention category
-python backend_tracking_query.py "C:/processed_contracts" --category long_term
+export OCR_BACKEND=nvidia
+export NVIDIA_API_KEY=nvapi-your-key-here
+python your_script.py
 ```
 
-### Metadata Fields Captured
-- `expiration_date` - Contract expiration
-- `effective_date` - When contract starts
-- `renewal_date` - Auto-renewal dates
-- `review_date` - Required review dates
-- `retention_category` - For destruction scheduling
-- `destruction_review_required` - Boolean flag
-- `tracking_id` - Unique identifier for backend
+### Sort files by year
 
-## 🧪 Testing
+```python
+processor = DocumentProcessor("/path/to/contracts")
+processor.sort_files_by_year("/path/to/archive", year_threshold=2017)
+```
 
-Run the signature detection test suite:
+## Project Structure
+
+```
+LegalDocuMan/
+├── legaldocuman/              # Main package
+│   ├── config.py              # Centralized config (env vars, constants)
+│   ├── processor.py           # DocumentProcessor orchestrator
+│   ├── extractors.py          # TextExtractor (PDF, DOCX, TXT + OCR)
+│   ├── classifiers.py         # DocumentTypeClassifier + DocumentStatusClassifier
+│   ├── dates.py               # DateExtractor
+│   ├── vendors.py             # VendorExtractor
+│   ├── utils.py               # File ops, naming, hashing
+│   └── backends/              # Pluggable OCR backends
+│       ├── base.py            # OCRBackend ABC
+│       ├── tesseract.py       # Tesseract + pdf2image
+│       └── nvidia.py          # NVIDIA OCR stub (fill in your API calls)
+├── tests/                     # Pytest suite (129 tests)
+├── .env.example               # Env var template
+├── requirements.txt           # Dependencies
+└── README.md                  # This file
+```
+
+## Running Tests
+
 ```bash
-python test_signature_detection.py
+pytest tests/ -v
 ```
 
-This will test the advanced signature detection system with various document types and signature patterns.
+All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast without system installs.
 
-## 🛠️ Troubleshooting
+## Document Types
 
-### OCR Not Working
-1. Install Tesseract-OCR system package
-2. Install Python packages: `pip install pytesseract pdf2image`
-3. Update Tesseract path in `document_processor.py` if needed
+| Type | Abbreviation | Description |
+|------|-------------|-------------|
+| MSA | AGMT | Master Service Agreement |
+| SOW | AGMT | Statement of Work |
+| NDA | AGMT | Non-Disclosure Agreement |
+| PO | K | Purchase Order |
+| AMD | AMD | Amendment |
+| LICENSE | K | License Agreement |
+| CONTRACT | K | General Contract |
 
-### PDF Processing Errors
-- Some PDFs may be password-protected or corrupted
-- Check error folder for problematic files
-- OCR fallback will attempt to process scanned documents
-- Using pdfplumber for superior text extraction accuracy
+## Retention Categories
 
-### Memory Issues
-- Large PDF files may consume significant memory
-- Processing is limited to first few pages for performance
-- Consider processing in smaller batches
+| Category | Document Types | Duration |
+|----------|---------------|----------|
+| `long_term` | MSA / Contract / Agreement (with expiration) | 7+ years |
+| `indefinite` | NDA, License | Permanent |
+| `contracts` | SOW | Tied to parent MSA |
+| `short_term` | PO, Invoice | 3-7 years |
+| `tied_to_parent` | Amendment | Same as parent |
+| `review_required` | Unknown / uncategorized | Manual review |
 
-## 📝 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📞 Support
-
-- Check the application logs in `%USERPROFILE%/Documents/DocumentProcessorLogs/` for detailed error information
-- Create an issue on GitHub for bug reports or feature requests
-- See [docs/BACKEND_TRACKING.md](docs/BACKEND_TRACKING.md) for backend tracking documentation
-
-## 🏆 Acknowledgments
-
-- Built with Python and modern GUI frameworks
-- Advanced signature detection algorithms
-- OCR support via Tesseract
-- PDF processing via pdfplumber
-- Date parsing via dateparser
-
----
-
-**Made with ❤️ for intelligent document processing**
+MIT
