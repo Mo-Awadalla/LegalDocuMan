@@ -1,17 +1,17 @@
 # LegalDocuMan
 
-Intelligent document processing for contracts, agreements, and legal documents. Extracts text, classifies document types, detects signatures, and organizes files automatically.
+Intelligent document processing for contracts, agreements, and legal documents. Extracts text, classifies document types, detects execution status, and organizes files automatically.
 
 ## Features
 
 - **Document Classification** — auto-detects MSA, SOW, NDA, PO, Amendment, License
-- **Signature Detection** — keyword-based scanning for digital, physical, and e-signature platforms
+- **Execution Status Detection** — deterministic regex-based classifier using execution-language patterns ("in witness whereof", "digitally signed by", signature blocks, e-signature platforms) to distinguish executed (`_final`) from non-executed (`_supporting`) documents
 - **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
-- **Folder Organization** — `_final` (signed) vs `_supporting` (unsigned)
+- **Folder Organization** — `_final` (executed) vs `_supporting` (unsigned / draft / exhibit)
 - **Date Extraction** — effective, expiration, renewal, and review dates from content
 - **Vendor Matching** — fuzzy match against a master vendor list
-- **Pluggable OCR Backends** — Tesseract (default) or NVIDIA (NeMo / Triton / TAO)
-- **Backend Tracking** — JSON registry with expiration tracking and retention categories
+- **Pluggable OCR Backends** — Tesseract (default, local) or NVIDIA (NeMo / Triton / TAO, stub ready)
+- **Retention Category Mapping** — auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent)
 
 ## Install
 
@@ -114,7 +114,7 @@ LegalDocuMan/
 │       ├── base.py            # OCRBackend ABC
 │       ├── tesseract.py       # Tesseract + pdf2image
 │       └── nvidia.py          # NVIDIA OCR stub (fill in your API calls)
-├── tests/                     # Pytest suite (129 tests)
+├── tests/                     # Pytest suite (106 tests, 69% coverage)
 ├── .env.example               # Env var template
 ├── requirements.txt           # Dependencies
 └── README.md                  # This file
@@ -126,7 +126,26 @@ LegalDocuMan/
 pytest tests/ -v
 ```
 
-All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast without system installs.
+Coverage report:
+```bash
+pytest tests/ --cov=legaldocuman --cov-report=term-missing
+```
+
+All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast without system installs. See [Known Limitations](#known-limitations) for integration test status.
+
+## Design Decisions
+
+This system was built for **NYCEM (New York City Emergency Management)**, processing 16,000+ real legal contracts containing privileged party names, signatures, and sensitive terms. The architecture reflects the institutional constraints of a government agency:
+
+- **Deterministic classifiers over ML models** — Regex-based document type and execution status detection were chosen because every classification decision must be explainable and defensible in a government audit. A CNN that says "this looks signed" is not auditable; a rule that says "the text contains 'IN WITNESS WHEREOF' and a signature block" is.
+
+- **No third-party cloud ML** — Data governance policy prohibited sending legal documents to external ML APIs (OpenAI, cloud CV services). All processing runs locally on agency infrastructure.
+
+- **No ML infrastructure** — The agency had no GPUs, model versioning, or ML ops pipeline. Building and maintaining a computer vision model was not feasible.
+
+- **Pluggable backend architecture** — The `OCRBackend` abstract base class and `NvidiaOCRBackend` stub exist so that when data governance policy eventually permits external ML services (or the agency acquires internal ML infrastructure), the OCR backend can be swapped without rewriting the pipeline.
+
+- **Retention category mapping** — Auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent) to support records-management and destruction-scheduling workflows required by government records officers.
 
 ## Document Types
 
@@ -150,6 +169,14 @@ All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast 
 | `short_term` | PO, Invoice | 3-7 years |
 | `tied_to_parent` | Amendment | Same as parent |
 | `review_required` | Unknown / uncategorized | Manual review |
+
+## Known Limitations
+
+- **Execution status detection is heuristic, not ML** — It scans extracted text for execution-language keywords and signature block patterns. It will not detect a hand-drawn signature image in a scanned PDF if OCR fails to extract text from it. It also cannot distinguish between "this contract requires a signature" (draft mentioning signatures) and "this contract was signed" (executed document).
+
+- **Unit tests only, no integration tests** — The test suite mocks all external dependencies (pdfplumber, Tesseract, PIL, dateparser). This means the tests verify internal logic but do not verify that the system works end-to-end with real PDFs or DOCX files on your machine. Integration tests (creating real documents and running the full pipeline) are the next step.
+
+- **NVIDIA backend is a stub** — The `NvidiaOCRBackend` class has the interface wired but the actual API calls are not implemented. Fill in `image_to_text()` and `pdf_to_text()` with your NVIDIA API client when ready.
 
 ## License
 
