@@ -9,7 +9,14 @@ openpyxl>=3.0.9,<4.0.0
 dateparser>=1.1.0,<2.0.0
 python-dotenv>=1.0.0,<2.0.0
 
-# Web application (Flask dashboard)
+# OCR — Tesseract (required)
+# Requires Tesseract OCR + poppler-utils installed on the host OS.
+# See README for OS-specific install instructions.
+pytesseract>=0.3.10,<1.0.0
+pdf2image>=1.0.0,<2.0.0
+Pillow>=9.0.0,<12.0.0
+
+# Web application
 Flask>=3.0.0,<4.0.0
 Flask-SQLAlchemy>=3.1.0,<4.0.0
 psycopg2-binary>=2.9.0,<3.0.0
@@ -17,14 +24,9 @@ psycopg2-binary>=2.9.0,<3.0.0
 # Development and testing
 pytest>=7.0.0,<9.0.0
 
-# Optional OCR dependencies (uncomment to enable)
-# pytesseract>=0.3.10,<1.0.0
-
-# Optional NVIDIA OCR support (uncomment to enable)
+# Optional NVIDIA OCR support (uncomment and set API key in .env to enable)
 # requests>=2.25.0,<3.0.0
 
 # Signature detection — RF-DETR visual model
 rfdetr>=1.7.0
 supervision>=0.23.0
-pdf2image>=1.0.0,<2.0.0
-Pillow>=9.0.0,<12.0.0
