@@ -23,10 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Bake the RF-DETR checkpoint into the image so the model is available at runtime.
-# Download from your model hosting (e.g. GitHub releases, S3, HuggingFace Hub).
-# Replace the URL below with your actual checkpoint location.
+# Downloaded from HuggingFace Hub: https://huggingface.co/Mo-Awadalla/legaldocuman-rfdetr
 RUN mkdir -p /project/models && \
     curl -L -o /project/models/checkpoint_best_total.pth \
-    "https://example.com/path/to/checkpoint_best_total.pth"
+    "https://huggingface.co/Mo-Awadalla/legaldocuman-rfdetr/resolve/main/checkpoint_best_total.pth"
 
 CMD ["python", "run.py"]
