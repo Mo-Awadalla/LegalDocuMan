@@ -255,6 +255,16 @@ This system was built for **NYCEM (New York City Emergency Management)**, proces
 | `tied_to_parent` | Amendment | Same as parent |
 | `review_required` | Unknown / uncategorized | Manual review |
 
+## Further Improvements
+
+The following are planned enhancements not yet implemented:
+
+1. **In-file rename support** — Currently the system extracts metadata and reports it via the API, but does not rename the uploaded file on disk. A post-processing step should rename the file to its generated filename (e.g. `K_VendorName_MasterServiceAgreement_001.pdf`) and update `stored_path` in the database accordingly.
+
+2. **Front-end refinements** — The Flask web UI (upload form, job list, job detail) is functional but minimal. Areas for improvement: drag-and-drop file upload, real-time job status polling via SSE or WebSocket, batch upload with per-file status feedback, and a dashboard summary view (total processed, breakdown by document type, execution status pie chart).
+
+3. **Async / threaded batch processing** — The `process_document_async` worker runs synchronously per document. When uploading large batches (100+ files), processing is sequential and slow. Thread-based or `asyncio`-based concurrency (with a worker pool bounded by CPU cores or a configurable concurrency limit) would significantly improve throughput for bulk uploads.
+
 ## Known Limitations
 
 - **Execution status detection combines regex + visual ML** — The system uses two signals: (1) deterministic regex scans extracted text for execution-language keywords ("in witness whereof", signature blocks, e-signature platform markers) to classify a document as executed or supporting, and (2) RF-DETR (a fine-tuned computer vision model) detects handwritten signature strokes in document images for a second confidence layer. RF-DETR requires the checkpoint at `models/checkpoint_best_total.pth` — if unavailable the system falls back to regex-only mode. The regex layer cannot distinguish between a draft that mentions signatures and a fully executed contract; visual detection helps close that gap but is not definitive on its own.
