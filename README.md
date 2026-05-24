@@ -45,9 +45,9 @@ cd LegalDocuMan
 pip install -r requirements.txt
 ```
 
-### Optional: OCR support
+### Prerequisites
 
-**Tesseract (local, free):**
+**Tesseract OCR + Poppler** (required for PDF text extraction):
 ```bash
 # macOS
 brew install tesseract poppler
@@ -55,15 +55,15 @@ brew install tesseract poppler
 # Ubuntu/Debian
 sudo apt-get install tesseract-ocr poppler-utils
 
-# Then uncomment OCR lines in requirements.txt and reinstall
-pip install pytesseract pdf2image Pillow
+# Windows — download from https://github.com/UB-Mannheim/tesseract/wiki
+# Then set the path in .env: TESSERACT_PATH=C:\\Program Files\\Tesseract-OCR\\tesseract.exe
 ```
 
-**NVIDIA OCR (API-based):**
+**NVIDIA OCR** (optional, requires API key in `.env`):
 ```bash
-# 1. Uncomment requests in requirements.txt
-# 2. Set your API key in .env
-pip install -r requirements.txt
+# Uncomment requests in requirements.txt, then:
+export OCR_BACKEND=nvidia
+export NVIDIA_API_KEY=nvapi-your-key-here
 ```
 
 ## Configuration
@@ -79,11 +79,11 @@ Key variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OCR_BACKEND` | `tesseract` | `tesseract` or `nvidia` |
-| `NVIDIA_API_KEY` | — | Your NVIDIA API key |
+| `NVIDIA_API_KEY` | — | Your NVIDIA API key (required only if `OCR_BACKEND=nvidia`) |
 | `NVIDIA_API_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA API endpoint |
 | `NVIDIA_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | Model identifier |
 | `TESSERACT_PATH` | auto-detect | Override Tesseract binary path |
-| `POPLER_PATH` | auto-detect | Override Poppler binary path |
+| `POPLER_PATH` | auto-detect | Override Poppler binary path (pdf2image) |
 
 `.env` is gitignored — never commit it.
 
