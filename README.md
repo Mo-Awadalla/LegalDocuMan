@@ -26,7 +26,7 @@ curl http://localhost:5000/api/v1/jobs/<job_id>
 ## Features
 
 - **Document Classification** — auto-detects MSA, SOW, NDA, PO, Amendment, License
-- **Execution Status Detection** — deterministic regex + optional RF-DETR visual signature detection to distinguish executed (`_final`) from non-executed (`_supporting`) documents
+- **Execution Status Detection** — deterministic regex + RF-DETR visual signature detection to distinguish executed (`_final`) from non-executed (`_supporting`) documents. RF-DETR is core to the classification pipeline — the model checkpoint is downloaded at Docker build time (or must be provided at `models/checkpoint_best_total.pth` for local development).
 - **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
 - **Folder Organization** — `_final` (executed) vs `_supporting` (unsigned / draft / exhibit)
 - **Date Extraction** — effective, expiration, renewal, and review dates from content
@@ -263,7 +263,7 @@ The following are planned enhancements not yet implemented:
 
 2. **Front-end refinements** — The Flask web UI (upload form, job list, job detail) is functional but minimal. Areas for improvement: drag-and-drop file upload, real-time job status polling via SSE or WebSocket, batch upload with per-file status feedback, and a dashboard summary view (total processed, breakdown by document type, execution status pie chart).
 
-3. **Async / threaded batch processing** — The `process_document_async` worker runs synchronously per document. When uploading large batches (100+ files), processing is sequential and slow. Thread-based or `asyncio`-based concurrency (with a worker pool bounded by CPU cores or a configurable concurrency limit) would significantly improve throughput for bulk uploads.
+3. **Async / threaded batch processing** — The `process_document_async` worker runs synchronously per document. RF-DETR inference is the slowest step in the pipeline, and sequential processing means large batches (100+ files) can take minutes. Thread-based or `asyncio`-based concurrency — with a worker pool bounded by CPU/GPU cores or a configurable concurrency limit — would significantly improve throughput for bulk uploads.
 
 ## Known Limitations
 
