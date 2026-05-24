@@ -26,7 +26,7 @@ curl http://localhost:5000/api/v1/jobs/<job_id>
 ## Features
 
 - **Document Classification** — auto-detects MSA, SOW, NDA, PO, Amendment, License
-- **Execution Status Detection** — deterministic regex + RF-DETR visual signature detection to distinguish executed (`_final`) from non-executed (`_supporting`) documents. RF-DETR is core to the classification pipeline — the model checkpoint is downloaded at Docker build time (or must be provided at `models/checkpoint_best_total.pth` for local development).
+- **Execution Status Detection** — deterministic regex + RF-DETR visual signature detection to distinguish executed (`_final`) from non-executed (`_supporting`) documents. RF-DETR is core to the classification pipeline — the model checkpoint is downloaded at Docker build time from [huggingface.co/Mo-Awadalla/legaldocuman-rfdetr](https://huggingface.co/Mo-Awadalla/legaldocuman-rfdetr) (or must be provided at `models/checkpoint_best_total.pth` for local development).
 - **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
 - **Folder Organization** — `_final` (executed) vs `_supporting` (unsigned / draft / exhibit)
 - **Date Extraction** — effective, expiration, renewal, and review dates from content
