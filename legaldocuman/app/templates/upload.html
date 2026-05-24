@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Upload - LegalDocuMan{% endblock %}
+{% block page_title %}Upload Document{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Upload</li>{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-upload me-1"></i>
+                Upload Document
+            </div>
+            <div class="card-body">
+                <form id="upload-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label" for="file-input">Select file (PDF, DOCX, DOC, TXT)</label>
+                        <input type="file" name="file" id="file-input" class="form-control" accept=".pdf,.docx,.doc,.txt" required>
+                        <div class="form-text">Maximum file size: 20 MB</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="upload-btn">
+                        <i class="fas fa-upload me-1"></i> Upload &amp; Process
+                    </button>
+                </form>
+                <div id="upload-result" class="d-none mt-4">
+                    <div class="card bg-success text-white mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title text-white">Uploaded successfully!</h5>
+                            <p class="mb-1">Document ID: <strong id="result-id"></strong></p>
+                            <p class="mb-1">Status: <span id="result-status"></span></p>
+                        </div>
+                        <div class="card-footer d-flex align-items-center justify-content-between bg-success">
+                            <a id="result-link" class="small text-white stretched-link" href="#">View Details</a>
+                            <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="upload-error" class="d-none mt-4">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <p class="mb-0" id="error-message"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const form = document.getElementById("upload-form");
+const fileInput = document.getElementById("file-input");
+const uploadBtn = document.getElementById("upload-btn");
+const resultDiv = document.getElementById("upload-result");
+const errorDiv = document.getElementById("upload-error");
+
+form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading...';
+    resultDiv.classList.add("d-none");
+    errorDiv.classList.add("d-none");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const res = await fetch("/api/v1/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok) {
+            document.getElementById("error-message").textContent = data.error || "Upload failed";
+            errorDiv.classList.remove("d-none");
+            return;
+        }
+        document.getElementById("result-id").textContent = data.id;
+        document.getElementById("result-status").textContent = data.status;
+        document.getElementById("result-link").href = "/jobs/" + data.id;
+        resultDiv.classList.remove("d-none");
+        form.reset();
+    } catch (err) {
+        document.getElementById("error-message").textContent = "Network error: " + err.message;
+        errorDiv.classList.remove("d-none");
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-upload me-1"></i> Upload &amp; Process';
+    }
+});
+</script>
+{% endblock %}

@@ -40,12 +40,38 @@ class Config:
     MIN_PAGE_TEXT_LENGTH: int = 10
 
     # ------------------------------------------------------------------
-    # Signature detection
+    # Signature detection — regex thresholds
     # ------------------------------------------------------------------
     SIGNATURE_CONTEXT_WINDOW: int = 200
     HIGH_CONFIDENCE_SIGNATURE_THRESHOLD: int = 3
     MEDIUM_CONFIDENCE_SIGNATURE_THRESHOLD: int = 1
     MAX_SIGNATURES_LOGGED: int = 5
+
+    # ------------------------------------------------------------------
+    # Signature detection — RF-DETR visual model
+    # ------------------------------------------------------------------
+    # Number of trailing pages to inspect for signatures (visual + regex fallback)
+    SIGNATURE_PAGES: int = 5
+    # DPI for rendering PDF pages to images before RF-DETR inference
+    PDF_RENDER_DPI: int = 150
+    # Minimum confidence to count a detection (below this → discarded as noise)
+    RFDETR_DETECTION_THRESHOLD: float = 0.35
+    # Confidence at or above this → high confidence (auto-process, no review needed)
+    RFDETR_HIGH_CONFIDENCE_THRESHOLD: float = 0.40
+    # Minimum number of visual signatures required to classify a document as final.
+    # A fully-executed contract must be signed by all parties (≥2).
+    MIN_VISUAL_SIGNATURES_FOR_FINAL: int = 2
+    # Path to the RF-DETR checkpoint; defaults to models/ in the project root.
+    # Override with RFDETR_MODEL_PATH env var.
+    RFDETR_MODEL_PATH: Optional[str] = field(
+        default_factory=lambda: os.environ.get(
+            "RFDETR_MODEL_PATH",
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "models", "checkpoint_best_total.pth",
+            ),
+        )
+    )
 
     # ------------------------------------------------------------------
     # File naming

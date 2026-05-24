@@ -1,58 +1,30 @@
-# Document Processing Suite Requirements
+# LegalDocuMan — Requirements
 # ==========================================
 
-# Core document processing dependencies
-pdfplumber>=0.10.0,<1.0.0         # Superior PDF text extraction
-python-docx>=0.8.11,<2.0.0        # Microsoft Word document processing
-pandas>=1.3.0,<3.0.0              # Data manipulation and Excel export
-openpyxl>=3.0.9,<4.0.0            # Excel file handling (.xlsx)
-dateparser>=1.1.0,<2.0.0          # Intelligent date parsing
-python-dotenv>=1.0.0,<2.0.0       # Load environment variables from .env
+# Core document processing
+pdfplumber>=0.10.0,<1.0.0
+python-docx>=0.8.11,<2.0.0
+pandas>=1.3.0,<3.0.0
+openpyxl>=3.0.9,<4.0.0
+dateparser>=1.1.0,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
 
-# GUI dependencies (tkinter included with Python)
-# No additional GUI packages needed - using built-in tkinter
+# Web application (Flask dashboard)
+Flask>=3.0.0,<4.0.0
+Flask-SQLAlchemy>=3.1.0,<4.0.0
+psycopg2-binary>=2.9.0,<3.0.0
 
-# Optional OCR dependencies for scanned documents
-# Uncomment these lines to enable OCR functionality:
-# pytesseract>=0.3.10,<1.0.0      # OCR text recognition
-# pdf2image>=2.1.0,<4.0.0         # PDF to image conversion for OCR
-# Pillow>=9.0.0,<11.0.0           # Image processing support
+# Development and testing
+pytest>=7.0.0,<9.0.0
 
-# NVIDIA OCR support (optional)
-# Uncomment if using NVIDIA NeMo / Triton / TAO OCR backend:
-# requests>=2.25.0,<3.0.0         # HTTP client for NVIDIA API calls
+# Optional OCR dependencies (uncomment to enable)
+# pytesseract>=0.3.10,<1.0.0
 
-# Development and testing (optional)
-# Uncomment for development work:
-# pytest>=7.0.0,<8.0.0            # Testing framework
-# black>=22.0.0,<24.0.0           # Code formatting
-# flake8>=4.0.0,<7.0.0            # Code linting
+# Optional NVIDIA OCR support (uncomment to enable)
+# requests>=2.25.0,<3.0.0
 
-# Performance optimization (optional)
-# Uncomment for better performance with large files:
-# numba>=0.56.0,<1.0.0            # JIT compilation for speed
-# lxml>=4.6.0,<5.0.0              # Faster XML processing
-
-# System Requirements:
-# - Python 3.7+ (recommended: Python 3.9+)
-# - Windows/macOS/Linux compatible
-# 
-# For OCR functionality (if enabled):
-# - Tesseract-OCR: https://github.com/UB-Mannheim/tesseract/wiki
-# - Poppler (for pdf2image): 
-#   * Windows: Download poppler binaries
-#   * macOS: brew install poppler
-#   * Linux: apt-get install poppler-utils
-#
-# Installation:
-# pip install -r requirements.txt
-#
-# For OCR support:
-# 1. Uncomment OCR lines above
-# 2. Install system dependencies (Tesseract, Poppler)
-# 3. pip install -r requirements.txt
-#
-# For NVIDIA OCR support:
-# 1. Uncomment the requests line above
-# 2. Set NVIDIA_API_KEY in your .env file
-# 3. Run with OCR_BACKEND=nvidia
+# Signature detection — RF-DETR visual model
+rfdetr>=1.7.0
+supervision>=0.23.0
+pdf2image>=1.0.0,<2.0.0
+Pillow>=9.0.0,<12.0.0

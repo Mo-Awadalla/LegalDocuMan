@@ -10,10 +10,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .config import Config
-from .extractors import TextExtractor
-from .classifiers import DocumentTypeClassifier, DocumentStatusClassifier
-from .dates import DateExtractor
-from .vendors import VendorExtractor
+from .intake import DocumentIntake, DocumentRecord
 from .utils import clean_vendor_for_filename, get_unique_filename, setup_directories
 
 
@@ -27,12 +24,11 @@ class DocumentProcessor:
         self.error_folder = error_folder or os.path.join(input_folder, self.cfg.ERROR_SUBDIR)
         setup_directories(self.error_folder)
 
-        # Initialize components
-        self.text_extractor = TextExtractor(ocr_backend=ocr_backend)
-        self.date_extractor = DateExtractor()
-        self.doc_type_classifier = DocumentTypeClassifier()
-        self.status_classifier = DocumentStatusClassifier()
-        self.vendor_extractor = VendorExtractor(vendor_master_list)
+        # Intake pipeline — extraction, classification, naming
+        self.intake = DocumentIntake(
+            vendor_master_list=vendor_master_list,
+            ocr_backend=ocr_backend,
+        )
 
         # Processing results
         self.results = {
@@ -81,85 +77,62 @@ class DocumentProcessor:
             subfolder_path = os.path.join(vendor_path, f"{vendor_name}{subfolder}")
             os.makedirs(subfolder_path, exist_ok=True)
 
+    def _get_unique_id(self, vendor_name, doc_type):
+        """Get unique sequential ID for a (vendor, doc_type) pair."""
+        with self.counter_lock:
+            self.contract_counters[vendor_name][doc_type] += 1
+            return self.contract_counters[vendor_name][doc_type]
+
     def _process_single_file(self, file_path, folder_name, vendor_base_path,
                              create_subfolders, naming_format):
         """Process a single document file."""
         filename = os.path.basename(file_path)
         logging.info(f"Processing: {filename}")
 
-        text_content = self.text_extractor.extract_text(file_path)
-        vendor_name = self.vendor_extractor.extract_vendor_from_folder(folder_name)
-        if self.vendor_extractor.vendor_master_list:
-            vendor_name, _ = self.vendor_extractor.match_vendor_against_master_list(vendor_name)
+        # 1. Run the intake analysis pipeline
+        record = self.intake.analyze(file_path=file_path, vendor_folder=folder_name)
 
-        clean_vendor = clean_vendor_for_filename(vendor_name)
-        doc_type = self.doc_type_classifier.identify_type(text_content, filename)
-        sig_analysis = self.status_classifier.get_signature_analysis(text_content)
-        doc_status = self.status_classifier.classify_status(filename, text_content)
+        if record.error:
+            self._move_to_error_folder(file_path, record.error)
+            return
 
-        date_str = self.date_extractor.extract_date_from_text(text_content, filename)
-        date_metadata = self.date_extractor.extract_dates_with_metadata(text_content)
+        # 2. Get unique ID (depends on vendor + doc_type from analysis)
+        unique_id = self._get_unique_id(record.clean_vendor, record.doc_type)
 
-        if naming_format == 'enhanced':
-            unique_id = self._get_unique_id(clean_vendor, doc_type)
-            new_filename = self._generate_enhanced_filename(
-                clean_vendor, doc_type, filename, date_str, unique_id
-            )
-        else:
-            new_filename = self._generate_simple_filename(clean_vendor, filename, date_str)
+        # 3. Generate filename
+        new_filename = self.intake.generate_filename_from_original(
+            record, filename, unique_id, naming_format
+        )
 
+        # 4. Determine target folder based on status
         if create_subfolders:
-            target_folder = os.path.join(vendor_base_path, f"{folder_name}_{doc_status}")
+            target_folder = os.path.join(vendor_base_path, f"{folder_name}_{record.status}")
             os.makedirs(target_folder, exist_ok=True)
         else:
             target_folder = vendor_base_path
 
+        # 5. Move file
         target_path = os.path.join(target_folder, new_filename)
         target_path = self._handle_filename_conflict(target_path)
         shutil.move(file_path, target_path)
 
-        metadata = self._create_metadata(target_path, {
-            'original_filename': filename,
-            'vendor': vendor_name,
-            'clean_vendor': clean_vendor,
-            'document_type': doc_type,
-            'status': doc_status,
-            'date_str': date_str,
-            'signature_analysis': sig_analysis,
-            'date_metadata': date_metadata,
-            'new_filename': new_filename,
-        })
+        # 6. Create metadata
+        metadata = self._create_metadata(target_path, record, new_filename)
 
+        # 7. Record results
         with self.results_lock:
             self.results['successful'].append({
                 'original': file_path,
                 'new_path': target_path,
-                'vendor': clean_vendor,
-                'type': doc_type,
-                'status': doc_status,
+                'vendor': record.clean_vendor,
+                'type': record.doc_type,
+                'status': record.status,
                 'metadata': metadata
             })
-            self.results['summary'][(clean_vendor, doc_type)] += 1
+            self.results['summary'][(record.clean_vendor, record.doc_type)] += 1
 
-        self._update_backend_tracking_registry(metadata)
-
-    def _generate_enhanced_filename(self, clean_vendor, doc_type, original_filename, date_str, unique_id):
-        """Generate enhanced filename: K_Vendor_type_001.ext"""
-        abbreviation = self.cfg.TYPE_ABBREVIATIONS.get(doc_type, 'K')
-        type_desc = self.cfg.TYPE_DESCRIPTIONS.get(doc_type, 'document')
-        file_ext = os.path.splitext(original_filename)[1]
-        return f"{abbreviation}_{clean_vendor}_{type_desc}_{unique_id:03d}{file_ext}"
-
-    def _generate_simple_filename(self, clean_vendor, original_filename, date_str):
-        """Generate simple filename: YYYYMMDD_Vendor_OriginalFile.ext"""
-        prefix = f"{date_str}_{clean_vendor}_" if date_str else f"{clean_vendor}_"
-        return f"{prefix}{original_filename}"
-
-    def _get_unique_id(self, vendor_name, doc_type):
-        """Get unique sequential ID."""
-        with self.counter_lock:
-            self.contract_counters[vendor_name][doc_type] += 1
-            return self.contract_counters[vendor_name][doc_type]
+        # 8. Update registry
+        self._update_backend_tracking_registry(metadata, target_path, new_filename)
 
     def _handle_filename_conflict(self, target_path):
         """Handle filename conflicts."""
@@ -172,7 +145,7 @@ class DocumentProcessor:
             counter += 1
         return target_path
 
-    def _create_metadata(self, file_path, metadata):
+    def _create_metadata(self, file_path, record, new_filename):
         """Create comprehensive metadata JSON file for backend tracking."""
         try:
             metadata_file = f"{os.path.splitext(file_path)[0]}.metadata.json"
@@ -181,31 +154,40 @@ class DocumentProcessor:
                 os.makedirs(metadata_dir, exist_ok=True)
 
             file_stat = os.stat(file_path)
-            metadata.update({
+            metadata = {
+                'original_filename': os.path.basename(file_path),
+                'vendor': record.vendor,
+                'clean_vendor': record.clean_vendor,
+                'document_type': record.doc_type,
+                'status': record.status,
+                'date_str': record.date_str,
+                'signature_analysis': record.signature_analysis,
+                'date_metadata': record.date_metadata,
+                'new_filename': new_filename,
                 'file_created_timestamp': datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
                 'file_modified_timestamp': datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
                 'metadata_created_timestamp': datetime.now().isoformat(),
                 'metadata_location': metadata_file,
-                'tracking_id': f"{metadata.get('vendor', 'unknown')}_{metadata.get('document_type', 'doc')}_{hash(file_path) % 10000:04d}",
+                'tracking_id': f"{record.vendor}_{record.doc_type}_{hash(file_path) % 10000:04d}",
                 'processing_date': datetime.now().isoformat(),
-            })
+            }
 
             retention = self.cfg.get_retention_category(
-                metadata.get('document_type', ''),
-                metadata.get('date_metadata', {}).get('expiration_date') is not None
+                record.doc_type,
+                record.date_metadata.get('expiration_date') is not None
             )
             metadata['retention_category'] = retention
 
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False, default=str)
 
-            logging.info(f"📋 Metadata saved: {metadata_file}")
+            logging.info(f"Metadata saved: {metadata_file}")
             return metadata
         except Exception as e:
-            logging.error(f"❌ Error creating metadata: {e}")
-            return metadata
+            logging.error(f"Error creating metadata: {e}")
+            return {}
 
-    def _update_backend_tracking_registry(self, document_metadata):
+    def _update_backend_tracking_registry(self, document_metadata, new_path, new_filename):
         """Update centralized registry for backend record tracking."""
         try:
             registry_file = os.path.join(self.input_folder, self.cfg.REGISTRY_FILE_NAME)
@@ -236,8 +218,8 @@ class DocumentProcessor:
                     'tracking_id': document_metadata.get('tracking_id'),
                     'vendor': document_metadata.get('vendor'),
                     'document_type': document_metadata.get('document_type'),
-                    'filename': document_metadata.get('new_filename'),
-                    'file_path': document_metadata.get('new_path'),
+                    'filename': new_filename,
+                    'file_path': new_path,
                     'expiration_date': document_metadata.get('expiration_date'),
                     'renewal_date': document_metadata.get('renewal_date'),
                     'review_date': document_metadata.get('review_date'),
@@ -253,9 +235,9 @@ class DocumentProcessor:
             with open(registry_file, 'w', encoding='utf-8') as f:
                 json.dump(registry, f, indent=2, ensure_ascii=False, default=str)
 
-            logging.info(f"📊 Updated backend tracking registry: {registry_file}")
+            logging.info(f"Updated backend tracking registry: {registry_file}")
         except Exception as e:
-            logging.error(f"❌ Error updating backend tracking registry: {e}")
+            logging.error(f"Error updating backend tracking registry: {e}")
 
     def _move_to_error_folder(self, file_path, error_reason):
         """Move problematic files to error folder."""
@@ -298,8 +280,8 @@ class DocumentProcessor:
             filename = os.path.basename(file_path)
             relative_path = os.path.relpath(file_path, self.input_folder)
             try:
-                text_content = self.text_extractor.extract_text(file_path)
-                date_str = self.date_extractor.extract_date_from_text(text_content, filename)
+                text_content = self.intake.text_extractor.extract_text(file_path)
+                date_str = self.intake.date_extractor.extract_date_from_text(text_content, filename)
                 if not date_str:
                     raise ValueError("No dates found")
                 year = int(date_str[:4])
@@ -362,7 +344,7 @@ class DocumentProcessor:
                     signature_stats['draft_no_sigs'] += 1
             for vendor, count in sorted(vendor_stats.items(), key=lambda x: -x[1]):
                 print(f"  {vendor}: {count} files")
-            print(f"\n🖋️  SIGNATURE-BASED CLASSIFICATION RESULTS:")
+            print(f"\nSIGNATURE-BASED CLASSIFICATION RESULTS:")
             print(f"  Final documents (with signatures): {signature_stats['final_with_sigs']}")
             print(f"  Draft documents (no signatures): {signature_stats['draft_no_sigs']}")
             print(f"  Supporting documents: {signature_stats['supporting']}")
@@ -383,8 +365,8 @@ class DocumentProcessor:
             try:
                 with open(registry_file, 'r', encoding='utf-8') as f:
                     registry = json.load(f)
-                print("\n📋 BACKEND TRACKING SUMMARY")
-                print("─" * 50)
+                print("\nBACKEND TRACKING SUMMARY")
+                print("-" * 50)
                 print(f"Total documents processed: {registry.get('total_documents', 0)}")
                 print(f"Documents with expiration dates: {registry.get('documents_with_expiration', 0)}")
                 retention_cats = registry.get('retention_categories', {})
@@ -404,17 +386,17 @@ class DocumentProcessor:
                         except ValueError:
                             continue
                 if upcoming_expirations:
-                    print(f"\n⚠️  EXPIRING WITHIN 12 MONTHS ({len(upcoming_expirations)} documents):")
+                    print(f"\nEXPIRING WITHIN 12 MONTHS ({len(upcoming_expirations)} documents):")
                     for exp_date, vendor, doc_type in upcoming_expirations[:5]:
                         print(f"  {exp_date} - {vendor} ({doc_type})")
                     if len(upcoming_expirations) > 5:
                         print(f"  ... and {len(upcoming_expirations) - 5} more")
                 else:
-                    print(f"\n✅ No documents expiring in next 12 months")
-                print(f"\n📁 Backend Tracking Files Created:")
+                    print(f"\nNo documents expiring in next 12 months")
+                print(f"\nBackend Tracking Files Created:")
                 print(f"  Registry: {self.cfg.REGISTRY_FILE_NAME}")
             except Exception as e:
                 logging.error(f"Error reading backend tracking registry: {e}")
         else:
-            print("\n📋 BACKEND TRACKING SUMMARY")
+            print("\nBACKEND TRACKING SUMMARY")
             print("No expiration tracking data available")
