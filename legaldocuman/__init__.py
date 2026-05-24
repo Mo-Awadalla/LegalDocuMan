@@ -11,6 +11,7 @@ from .classifiers import DocumentTypeClassifier, DocumentStatusClassifier
 from .dates import DateExtractor
 from .vendors import VendorExtractor
 from .processor import DocumentProcessor
+from .intake import DocumentIntake, DocumentRecord
 
 __all__ = [
     "Config",
@@ -20,4 +21,6 @@ __all__ = [
     "DateExtractor",
     "VendorExtractor",
     "DocumentProcessor",
+    "DocumentIntake",
+    "DocumentRecord",
 ]

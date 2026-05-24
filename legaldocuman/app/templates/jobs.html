@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Documents - LegalDocuMan{% endblock %}
+{% block page_title %}All Documents{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Documents</li>{% endblock %}
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="fas fa-table me-1"></i>
+        Document List
+    </div>
+    <div class="card-body">
+        {% if documents %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Filename</th>
+                    <th>Status</th>
+                    <th>Type</th>
+                    <th>Vendor</th>
+                    <th>Uploaded</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr>
+                    <td>{{ doc.id }}</td>
+                    <td>{{ doc.original_name[:60] }}{% if doc.original_name|length > 60 %}&hellip;{% endif %}</td>
+                    <td>
+                        {% if doc.status.value == 'completed' %}
+                        <span class="badge bg-success">Completed</span>
+                        {% elif doc.status.value == 'processing' %}
+                        <span class="badge bg-warning text-dark">Processing</span>
+                        {% elif doc.status.value == 'pending' %}
+                        <span class="badge bg-secondary">Pending</span>
+                        {% elif doc.status.value == 'failed' %}
+                        <span class="badge bg-danger">Failed</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ doc.document_type or '-' }}</td>
+                    <td>{{ doc.vendor or '-' }}</td>
+                    <td>{{ doc.created_at.strftime('%Y-%m-%d %H:%M') if doc.created_at else '-' }}</td>
+                    <td>
+                        <a href="{{ url_for('main.job_detail', doc_id=doc.id) }}" class="btn btn-outline-primary btn-sm">Details</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+            <p class="lead text-muted">No documents yet</p>
+            <p class="text-muted mb-4">Upload a document to get started.</p>
+            <a href="{{ url_for('main.upload') }}" class="btn btn-primary">
+                <i class="fas fa-upload me-1"></i> Upload Document
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

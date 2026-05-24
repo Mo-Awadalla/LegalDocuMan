@@ -370,21 +370,21 @@ class TestDocumentProcessor:
     def test_init_initializes_components(self, temp_dir):
         input_path = str(temp_dir / "input")
         processor = DocumentProcessor(input_path)
-        assert processor.text_extractor is not None
-        assert processor.date_extractor is not None
-        assert processor.doc_type_classifier is not None
-        assert processor.status_classifier is not None
-        assert processor.vendor_extractor is not None
+        assert processor.intake.text_extractor is not None
+        assert processor.intake.date_extractor is not None
+        assert processor.intake.doc_type_classifier is not None
+        assert processor.intake.status_classifier is not None
+        assert processor.intake.vendor_extractor is not None
 
     def test_init_with_vendor_list(self, temp_dir):
         input_path = str(temp_dir / "input")
         processor = DocumentProcessor(input_path, vendor_master_list=["Acme", "Beta"])
-        assert processor.vendor_extractor.vendor_master_list == ["Acme", "Beta"]
+        assert processor.intake.vendor_extractor.vendor_master_list == ["Acme", "Beta"]
 
     def test_generate_enhanced_filename(self, temp_dir):
         input_path = str(temp_dir / "input")
         processor = DocumentProcessor(input_path)
-        fn = processor._generate_enhanced_filename("AcmeCorp", "MSA", "old.pdf", "20240115", 1)
+        fn = processor.intake._enhanced_filename("AcmeCorp", "MSA", "old.pdf", 1)
         assert "AcmeCorp" in fn
         assert "AGMT" in fn
         assert "masterServiceAgreement" in fn
@@ -394,7 +394,7 @@ class TestDocumentProcessor:
     def test_generate_simple_filename(self, temp_dir):
         input_path = str(temp_dir / "input")
         processor = DocumentProcessor(input_path)
-        fn = processor._generate_simple_filename("AcmeCorp", "old.pdf", "20240115")
+        fn = processor.intake._simple_filename("AcmeCorp", "old.pdf", "20240115")
         assert fn.startswith("20240115")
         assert "AcmeCorp" in fn
 
@@ -419,21 +419,24 @@ class TestDocumentProcessor:
         processor = DocumentProcessor(input_path)
         file_path = str(temp_dir / "file.pdf")
         open(file_path, 'w').close()
-        processor._create_metadata(
-            file_path,
-            {
-                "original_filename": "old.pdf",
-                "vendor": "Acme",
-                "document_type": "MSA",
-                "status": "final",
-            }
+        from legaldocuman.intake import DocumentRecord
+        record = DocumentRecord(
+            vendor="Acme",
+            clean_vendor="Acme",
+            doc_type="MSA",
+            status="final",
+            date_str="20240115",
+            date_metadata={},
+            signature_analysis={},
+            text_content="test content",
         )
+        processor._create_metadata(file_path, record, "AGMT_Acme_masterServiceAgreement_001.pdf")
         meta_file = str(temp_dir / "file.metadata.json")
         assert os.path.exists(meta_file)
         with open(meta_file) as f:
             import json
             meta = json.load(f)
-        assert meta["original_filename"] == "old.pdf"
+        assert meta["original_filename"] == "file.pdf"
         assert meta["vendor"] == "Acme"
         assert meta["document_type"] == "MSA"
         assert "metadata_created_timestamp" in meta
@@ -479,7 +482,7 @@ class TestDocumentProcessor:
         input_path = str(temp_dir / "input")
         os.makedirs(input_path, exist_ok=True)
         processor = DocumentProcessor(input_path)
-        monkeypatch.setattr(processor.date_extractor, 'extract_date_from_text', lambda text, filename: "20150101")
+        monkeypatch.setattr(processor.intake.date_extractor, 'extract_date_from_text', lambda text, filename: "20150101")
         src = os.path.join(input_path, "Contract_2015.pdf")
         open(src, 'w').close()
         archive_dir = str(temp_dir / "archive")
@@ -490,7 +493,7 @@ class TestDocumentProcessor:
         input_path = str(temp_dir / "input")
         os.makedirs(input_path, exist_ok=True)
         processor = DocumentProcessor(input_path)
-        monkeypatch.setattr(processor.date_extractor, 'extract_date_from_text', lambda text, filename: "20230101")
+        monkeypatch.setattr(processor.intake.date_extractor, 'extract_date_from_text', lambda text, filename: "20230101")
         src = os.path.join(input_path, "Contract_2023.pdf")
         open(src, 'w').close()
         archive_dir = str(temp_dir / "archive")

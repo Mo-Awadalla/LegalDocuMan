@@ -1,19 +1,43 @@
 # LegalDocuMan
 
-Intelligent document processing for contracts, agreements, and legal documents. Extracts text, classifies document types, detects execution status, and organizes files automatically.
+Intelligent document processing for contracts, agreements, and legal documents. Extracts text, classifies document types, detects execution status, and organizes files automatically — via CLI or REST API.
+
+## TL;DR — Docker (Fastest)
+
+```bash
+git clone https://github.com/Mo-Awadalla/LegalDocuMan.git
+cd LegalDocuMan
+docker compose up --build
+```
+
+Then upload a document:
+
+```bash
+curl -X POST http://localhost:5000/api/v1/upload \
+  -F "file=@/path/to/your/contract.pdf"
+```
+
+Check processing status:
+
+```bash
+curl http://localhost:5000/api/v1/jobs/<job_id>
+```
 
 ## Features
 
 - **Document Classification** — auto-detects MSA, SOW, NDA, PO, Amendment, License
-- **Execution Status Detection** — deterministic regex-based classifier using execution-language patterns ("in witness whereof", "digitally signed by", signature blocks, e-signature platforms) to distinguish executed (`_final`) from non-executed (`_supporting`) documents
+- **Execution Status Detection** — deterministic regex + optional RF-DETR visual signature detection to distinguish executed (`_final`) from non-executed (`_supporting`) documents
 - **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
 - **Folder Organization** — `_final` (executed) vs `_supporting` (unsigned / draft / exhibit)
 - **Date Extraction** — effective, expiration, renewal, and review dates from content
 - **Vendor Matching** — fuzzy match against a master vendor list
 - **Pluggable OCR Backends** — Tesseract (default, local) or NVIDIA (NeMo / Triton / TAO, stub ready)
 - **Retention Category Mapping** — auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent)
+- **REST API** — upload documents, poll job status, retrieve metadata (type, vendor, execution status, dates, retention category, generated filename)
+- **PostgreSQL persistence** — all document records stored with checksum, file size, and full metadata
+- **Docker-ready** — single `docker compose up` spins up the app + database
 
-## Install
+## Manual Install
 
 ```bash
 git clone https://github.com/Mo-Awadalla/LegalDocuMan.git
@@ -63,7 +87,50 @@ Key variables:
 
 `.env` is gitignored — never commit it.
 
-## Usage
+## Web API
+
+Start the server:
+
+```bash
+docker compose up       # Docker
+# or
+python run.py           # Manual — requires PostgreSQL running
+```
+
+**Upload a document:**
+```bash
+curl -X POST http://localhost:5000/api/v1/upload \
+  -F "file=@/path/to/contract.pdf"
+```
+
+Response:
+```json
+{"id": 1, "status": "pending"}
+```
+
+**Check job status:**
+```bash
+curl http://localhost:5000/api/v1/jobs/1
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "original_name": "contract.pdf",
+  "status": "completed",
+  "document_type": "MSA",
+  "vendor": "Acme Corp",
+  "execution_status": "executed",
+  "effective_date": "2024-01-01",
+  "expiration_date": "2026-12-31",
+  "retention_category": "long_term",
+  "generated_filename": "K_AcmeCorp_MasterServiceAgreement_001.pdf",
+  "created_at": "2026-05-24T10:00:00"
+}
+```
+
+## CLI Usage
 
 ```python
 from legaldocuman import DocumentProcessor
@@ -109,14 +176,30 @@ LegalDocuMan/
 │   ├── classifiers.py         # DocumentTypeClassifier + DocumentStatusClassifier
 │   ├── dates.py               # DateExtractor
 │   ├── vendors.py             # VendorExtractor
+│   ├── intake.py              # DocumentIntake pipeline (stateless)
+│   ├── storage.py             # StorageBackend abstraction
 │   ├── utils.py               # File ops, naming, hashing
+│   ├── run.py                 # Flask app entry point
 │   └── backends/              # Pluggable OCR backends
 │       ├── base.py            # OCRBackend ABC
 │       ├── tesseract.py       # Tesseract + pdf2image
-│       └── nvidia.py          # NVIDIA OCR stub (fill in your API calls)
-├── tests/                     # Pytest suite (106 tests, 69% coverage)
+│       ├── nvidia.py          # NVIDIA OCR stub
+│       └── rfdetr_signature.py # RF-DETR visual signature detector
+├── legaldocuman/app/          # Flask web application
+│   ├── __init__.py            # create_app() factory
+│   ├── config_loader.py       # Env var → Flask config
+│   ├── extensions.py          # Flask-SQLAlchemy db instance
+│   ├── models.py              # Document SQLAlchemy model
+│   ├── main/routes.py         # Main blueprint routes
+│   ├── api/routes.py          # Upload + job status API
+│   └── processors/
+│       └── worker.py           # Background document processor
+├── models/                    # RF-DETR checkpoint
+├── tests/                     # Pytest suite
+├── Dockerfile                 # Container definition
+├── docker-compose.yml         # App + PostgreSQL orchestration
 ├── .env.example               # Env var template
-├── requirements.txt           # Dependencies
+├── requirements.txt          # Dependencies
 └── README.md                  # This file
 ```
 
@@ -146,6 +229,8 @@ This system was built for **NYCEM (New York City Emergency Management)**, proces
 - **Pluggable backend architecture** — The `OCRBackend` abstract base class and `NvidiaOCRBackend` stub exist so that when data governance policy eventually permits external ML services (or the agency acquires internal ML infrastructure), the OCR backend can be swapped without rewriting the pipeline.
 
 - **Retention category mapping** — Auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent) to support records-management and destruction-scheduling workflows required by government records officers.
+
+- **Stateless intake pipeline** — `DocumentIntake` is a pure function from `(file_path, vendor_folder) → DocumentRecord`. File movement, metadata persistence, and registry updates are the caller's responsibility. This makes the core analysis logic easy to test, replay, and compose into larger workflows.
 
 ## Document Types
 

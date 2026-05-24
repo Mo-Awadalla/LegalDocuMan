@@ -130,6 +130,7 @@ dmypy.json
 
 # Application specific
 DocumentProcessorLogs/
+models/
 *.metadata.json
 _backend_tracking_registry.json
 file_sorting_summary.xlsx
@@ -149,3 +150,8 @@ backend_tracking_report_*.xlsx
 # OS files
 .DS_Store
 Thumbs.db
+
+# Agent / personal tooling
+.claude/
+graphify-out/
+"D̄ ProjectsLegalDocuMan.gitignore"

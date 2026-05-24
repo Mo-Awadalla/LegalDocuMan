@@ -1,0 +1,33 @@
+.venv
+.env
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+.eggs
+uploads
+*.metadata.json
+_backend_tracking_registry.json
+file_sorting_summary.xlsx
+*.log
+.vscode
+.idea
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# Agent tooling
+.claude/
+graphify-out/
+"D̄ ProjectsLegalDocuMan.gitignore"
+
+# Model weights (downloaded at build time)
+models/checkpoint_best_total.pth
