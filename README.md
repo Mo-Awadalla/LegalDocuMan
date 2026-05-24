@@ -218,17 +218,17 @@ All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast 
 
 ## Design Decisions
 
-This system was built for **NYCEM (New York City Emergency Management)**, processing 16,000+ real legal contracts containing privileged party names, signatures, and sensitive terms. The architecture reflects the institutional constraints of a government agency:
+This system was productized from a script originally built for processing large volumes of legal contracts containing privileged party names, signatures, and sensitive terms. The architecture reflects lessons learned from that domain:
 
 - **Regex + visual ML, not either/or** — Document type classification is pure regex (explainable in audits). Execution status uses both regex (fast, text-based) and RF-DETR (slow but visually detects signature strokes). The regex layer flags execution language; RF-DETR confirms presence of ink signatures on the page. Every decision is traceable: regex matches are logged, RF-DETR detections include confidence scores and bounding boxes.
 
-- **No third-party cloud ML** — Data governance policy prohibited sending legal documents to external ML APIs (OpenAI, cloud CV services). All processing (OCR, classification, visual signature detection) runs locally on agency infrastructure.
+- **No third-party cloud ML** — Sensitive legal documents should never leave your infrastructure. All processing (OCR, classification, visual signature detection) runs locally — no external API calls to OpenAI, cloud CV services, or third-party providers.
 
-- **No ML infrastructure** — The agency had no GPUs, model versioning, or ML ops pipeline. Building and maintaining a computer vision model was not feasible.
+- **Runs on commodity hardware** — No GPU required. Tesseract OCR runs on CPU. RF-DETR works with CPU-only PyTorch (the Docker image ships the CPU wheel). The system is designed to work on a standard laptop or a modest cloud VM.
 
-- **Pluggable backend architecture** — The `OCRBackend` abstract base class and `NvidiaOCRBackend` stub exist so that when data governance policy eventually permits external ML services (or the agency acquires internal ML infrastructure), the OCR backend can be swapped without rewriting the pipeline.
+- **Pluggable backend architecture** — The `OCRBackend` abstract base class and `NvidiaOCRBackend` stub are wired so you can swap in a GPU-backed OCR backend without touching the pipeline. Same pattern for storage: swap `LocalStorageBackend` for S3 or GCS with zero pipeline changes.
 
-- **Retention category mapping** — Auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent) to support records-management and destruction-scheduling workflows required by government records officers.
+- **Retention category mapping** — Auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent) to support records-management and destruction-scheduling workflows.
 
 - **Stateless intake pipeline** — `DocumentIntake` is a pure function from `(file_path, vendor_folder) → DocumentRecord`. File movement, metadata persistence, and registry updates are the caller's responsibility. This makes the core analysis logic easy to test, replay, and compose into larger workflows.
 
