@@ -220,9 +220,9 @@ All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast 
 
 This system was built for **NYCEM (New York City Emergency Management)**, processing 16,000+ real legal contracts containing privileged party names, signatures, and sensitive terms. The architecture reflects the institutional constraints of a government agency:
 
-- **Deterministic classifiers over ML models** — Regex-based document type and execution status detection were chosen because every classification decision must be explainable and defensible in a government audit. A CNN that says "this looks signed" is not auditable; a rule that says "the text contains 'IN WITNESS WHEREOF' and a signature block" is.
+- **Regex + visual ML, not either/or** — Document type classification is pure regex (explainable in audits). Execution status uses both regex (fast, text-based) and RF-DETR (slow but visually detects signature strokes). The regex layer flags execution language; RF-DETR confirms presence of ink signatures on the page. Every decision is traceable: regex matches are logged, RF-DETR detections include confidence scores and bounding boxes.
 
-- **No third-party cloud ML** — Data governance policy prohibited sending legal documents to external ML APIs (OpenAI, cloud CV services). All processing runs locally on agency infrastructure.
+- **No third-party cloud ML** — Data governance policy prohibited sending legal documents to external ML APIs (OpenAI, cloud CV services). All processing (OCR, classification, visual signature detection) runs locally on agency infrastructure.
 
 - **No ML infrastructure** — The agency had no GPUs, model versioning, or ML ops pipeline. Building and maintaining a computer vision model was not feasible.
 
@@ -257,7 +257,7 @@ This system was built for **NYCEM (New York City Emergency Management)**, proces
 
 ## Known Limitations
 
-- **Execution status detection is heuristic, not ML** — It scans extracted text for execution-language keywords and signature block patterns. It will not detect a hand-drawn signature image in a scanned PDF if OCR fails to extract text from it. It also cannot distinguish between "this contract requires a signature" (draft mentioning signatures) and "this contract was signed" (executed document).
+- **Execution status detection combines regex + visual ML** — The system uses two signals: (1) deterministic regex扫描 extracted text for execution-language keywords ("in witness whereof", signature blocks, e-signature platform markers) to classify a document as executed or supporting, and (2) RF-DETR (a fine-tuned computer vision model) detects handwritten signature strokes in document images for a second confidence layer. RF-DETR requires the checkpoint at `models/checkpoint_best_total.pth` — if unavailable the system falls back to regex-only mode. The regex layer cannot distinguish between a draft that mentions signatures and a fully executed contract; visual detection helps close that gap but is not definitive on its own.
 
 - **Unit tests only, no integration tests** — The test suite mocks all external dependencies (pdfplumber, Tesseract, PIL, dateparser). This means the tests verify internal logic but do not verify that the system works end-to-end with real PDFs or DOCX files on your machine. Integration tests (creating real documents and running the full pipeline) are the next step.
 
