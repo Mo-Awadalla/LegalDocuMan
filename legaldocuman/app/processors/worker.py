@@ -1,10 +1,12 @@
 import logging
 import os
+import shutil
 import threading
 from datetime import datetime, timezone
 
 from legaldocuman.intake import DocumentIntake, DocumentRecord
 from legaldocuman.config import Config
+from legaldocuman.utils import resolve_filename_conflict
 
 from ..extensions import db
 from ..models import Document, DocumentStatus
@@ -57,6 +59,23 @@ def _process(doc_id):
                 "signature_analysis": record.signature_analysis,
                 "retention_category": doc.retention_category,
             }
+
+            if record.status in ("final", "supporting"):
+                vendor_folder = record.clean_vendor or "UnknownVendor"
+                target_dir = os.path.join(
+                    Config.get().PROCESSED_FOLDER,
+                    f"{vendor_folder}_{record.status}",
+                )
+                os.makedirs(target_dir, exist_ok=True)
+
+                target_path = os.path.join(target_dir, doc.generated_filename)
+                target_path = resolve_filename_conflict(target_path)
+
+                shutil.move(doc.stored_path, target_path)
+
+                doc.stored_path = target_path
+                doc.processed_folder = record.status
+
             doc.status = DocumentStatus.COMPLETED
             db.session.commit()
 

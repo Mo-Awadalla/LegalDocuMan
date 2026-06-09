@@ -5,6 +5,7 @@ from legaldocuman.utils import (
     setup_directories,
     safe_move_file,
     get_unique_filename,
+    resolve_filename_conflict,
     clean_filename,
     format_file_size,
     get_file_info,
@@ -139,3 +140,21 @@ class TestBackupFile:
     def test_returns_none_for_missing_file(self, temp_dir):
         result = backup_file(str(temp_dir / "missing.txt"))
         assert result is None
+
+
+class TestResolveFilenameConflict:
+    def test_returns_same_if_no_conflict(self, temp_dir):
+        p = str(temp_dir / "new_file.txt")
+        assert resolve_filename_conflict(p) == p
+
+    def test_appends_conflict_suffix(self, temp_dir):
+        existing = temp_dir / "file.txt"
+        existing.write_text("existing")
+        result = resolve_filename_conflict(str(existing))
+        assert result.endswith("_conflict01.txt")
+
+    def test_increments_on_multiple_conflicts(self, temp_dir):
+        (temp_dir / "file.txt").write_text("a")
+        (temp_dir / "file_conflict01.txt").write_text("b")
+        result = resolve_filename_conflict(str(temp_dir / "file.txt"))
+        assert result.endswith("_conflict02.txt")

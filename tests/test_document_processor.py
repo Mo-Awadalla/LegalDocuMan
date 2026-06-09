@@ -407,11 +407,10 @@ class TestDocumentProcessor:
         assert int(id2) == int(id1) + 1
 
     def test_handle_filename_conflict_appends_counter(self, temp_dir):
-        input_path = str(temp_dir / "input")
-        processor = DocumentProcessor(input_path)
+        from legaldocuman.utils import resolve_filename_conflict
         target = str(temp_dir / "file.txt")
         open(target, 'w').close()
-        result = processor._handle_filename_conflict(target)
+        result = resolve_filename_conflict(target)
         assert "_conflict01" in result
 
     def test_create_metadata_structure(self, temp_dir):
