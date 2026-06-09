@@ -80,6 +80,18 @@ def get_unique_filename(file_path):
     return file_path
 
 
+def resolve_filename_conflict(target_path):
+    """Resolve filename conflicts by appending _conflictNN suffix."""
+    if not os.path.exists(target_path):
+        return target_path
+    base_path, ext = os.path.splitext(target_path)
+    counter = 1
+    while os.path.exists(target_path):
+        target_path = f"{base_path}_conflict{counter:02d}{ext}"
+        counter += 1
+    return target_path
+
+
 def clean_filename(filename):
     """Clean filename for cross-platform compatibility."""
     invalid_chars = '<>:"/\\|?*'

@@ -93,6 +93,9 @@ class Config:
     ERROR_SUBDIR: str = "_errors"
     BACKUP_SUBDIR: str = "_backup"
     REGISTRY_FILE_NAME: str = "_backend_tracking_registry.json"
+    PROCESSED_FOLDER: str = field(
+        default_factory=lambda: os.environ.get("PROCESSED_FOLDER", "./processed")
+    )
 
     # ------------------------------------------------------------------
     # Tesseract / OCR tool paths (override via env vars)

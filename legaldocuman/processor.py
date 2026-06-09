@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from .config import Config
 from .intake import DocumentIntake, DocumentRecord
-from .utils import clean_vendor_for_filename, get_unique_filename, setup_directories
+from .utils import clean_vendor_for_filename, get_unique_filename, resolve_filename_conflict, setup_directories
 
 
 class DocumentProcessor:
@@ -113,7 +113,7 @@ class DocumentProcessor:
 
         # 5. Move file
         target_path = os.path.join(target_folder, new_filename)
-        target_path = self._handle_filename_conflict(target_path)
+        target_path = resolve_filename_conflict(target_path)
         shutil.move(file_path, target_path)
 
         # 6. Create metadata
@@ -133,17 +133,6 @@ class DocumentProcessor:
 
         # 8. Update registry
         self._update_backend_tracking_registry(metadata, target_path, new_filename)
-
-    def _handle_filename_conflict(self, target_path):
-        """Handle filename conflicts."""
-        if not os.path.exists(target_path):
-            return target_path
-        base_path, ext = os.path.splitext(target_path)
-        counter = 1
-        while os.path.exists(target_path):
-            target_path = f"{base_path}_conflict{counter:02d}{ext}"
-            counter += 1
-        return target_path
 
     def _create_metadata(self, file_path, record, new_filename):
         """Create comprehensive metadata JSON file for backend tracking."""
@@ -245,7 +234,7 @@ class DocumentProcessor:
             filename = os.path.basename(file_path)
             error_file_path = os.path.join(self.error_folder, filename)
             if os.path.exists(error_file_path):
-                error_file_path = self._handle_filename_conflict(error_file_path)
+                error_file_path = resolve_filename_conflict(error_file_path)
             shutil.move(file_path, error_file_path)
             with open(f"{error_file_path}.error.txt", 'w') as f:
                 f.write(f"Error: {error_reason}\n")
@@ -290,7 +279,7 @@ class DocumentProcessor:
                     dest_dir = os.path.join(pre_2017_dir, rel_dir) if rel_dir else pre_2017_dir
                     os.makedirs(dest_dir, exist_ok=True)
                     dest_path = os.path.join(dest_dir, filename)
-                    dest_path = self._handle_filename_conflict(dest_path)
+                    dest_path = resolve_filename_conflict(dest_path)
                     shutil.move(file_path, dest_path)
                     file_summary.append({'file': filename, 'year': year,
                                          'action': f'Moved to pre-{year_threshold}',
