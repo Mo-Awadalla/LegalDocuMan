@@ -423,6 +423,7 @@ class DocumentStatusClassifier:
 
         high_confidence_patterns = [
             'executed in duplicate',
+            'executed this in duplicate',
             'docusign envelope',
             'digitally signed by',
         ]

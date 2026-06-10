@@ -39,9 +39,9 @@ class NvidiaOCRBackend(OCRBackend):
         if not self.cfg.NVIDIA_API_KEY:
             logging.warning("NVIDIA_API_KEY not set — NVIDIA OCR unavailable")
             return
-        # Stub: pretend available for demo purposes
-        self._available = True
-        logging.info("NVIDIA OCR backend initialised (stub mode)")
+        logging.warning(
+            "NVIDIA OCR backend is configured but not implemented — falling back to Tesseract"
+        )
 
     # ------------------------------------------------------------------
     # OCRBackend implementation

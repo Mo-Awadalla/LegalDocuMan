@@ -83,6 +83,25 @@ class VendorExtractor:
 
         return None
 
+    def extract_vendor_from_filename(self, filename: str) -> Optional[str]:
+        """Best-effort vendor signal from upload filenames such as Acme_MSA_2024.pdf."""
+        if not filename:
+            return None
+        base = re.sub(r'\.[A-Za-z0-9]+$', '', filename)
+        tokens = [t for t in re.split(r'[\s_\-]+', base) if t]
+        stop = {
+            'msa', 'sow', 'nda', 'po', 'contract', 'agreement', 'amendment',
+            'license', 'final', 'signed', 'executed', 'draft', 'copy'
+        }
+        vendor_tokens = []
+        for token in tokens:
+            if token.lower() in stop or re.fullmatch(r'\d{2,4}', token):
+                break
+            vendor_tokens.append(token)
+        if vendor_tokens:
+            return ' '.join(vendor_tokens)
+        return None
+
     def match_vendor_against_master_list(self, vendor_name, threshold=80):
         """Match vendor against master list using fuzzy matching."""
         if not vendor_name or not self.vendor_master_list:

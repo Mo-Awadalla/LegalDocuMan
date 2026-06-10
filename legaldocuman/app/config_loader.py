@@ -16,6 +16,10 @@ def init_app_config(app):
     app.config["ALLOWED_EXTENSIONS"] = set(cfg.SUPPORTED_EXTENSIONS)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/legaldocuman",
+        "postgresql://postgres:***@localhost:5432/legaldocuman",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["API_KEY"] = os.environ.get("API_KEY", "")
+    app.config["CORS_ORIGINS"] = os.environ.get("CORS_ORIGINS", "")
+    app.config["AUTO_CREATE_DB"] = os.environ.get("AUTO_CREATE_DB", "1").lower() in {"1", "true", "yes"}
+    app.config["JOB_BACKEND"] = os.environ.get("JOB_BACKEND", "thread").lower()
