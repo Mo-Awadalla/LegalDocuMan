@@ -1,0 +1,18 @@
+[project]
+name = "legaldocuman"
+version = "0.1.0"
+description = "Legal document intake, classification, and management"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

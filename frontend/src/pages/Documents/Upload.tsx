@@ -7,6 +7,7 @@ import { uploadDocument, getJobStatus, type Document } from "../../services/api"
 
 interface UploadResult {
   id: number;
+  jobId?: number;
   status: string;
   document?: Document;
   error?: string;
@@ -16,22 +17,22 @@ export default function Upload() {
   const [results, setResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  const pollStatus = useCallback(async (id: number) => {
+  const pollStatus = useCallback(async (jobId: number) => {
     const poll = async () => {
       try {
-        const doc = await getJobStatus(id);
+        const job = await getJobStatus(jobId);
         setResults((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, status: doc.status, document: doc } : r
+            r.jobId === jobId ? { ...r, status: job.status, document: job.document || r.document } : r
           )
         );
-        if (doc.status === "processing" || doc.status === "pending") {
+        if (job.status === "queued" || job.status === "processing" || job.status === "pending") {
           setTimeout(poll, 3000);
         }
       } catch {
         setResults((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, error: "Failed to check status" } : r
+            r.jobId === jobId ? { ...r, error: "Failed to check status" } : r
           )
         );
       }
@@ -54,10 +55,10 @@ export default function Upload() {
           setResults((prev) => {
             const updated = [...prev];
             const idx = updated.length - acceptedFiles.length + i;
-            updated[idx] = { id: res.id, status: res.status };
+            updated[idx] = { id: res.id, jobId: res.job_id, status: res.job_status || res.status };
             return updated;
           });
-          pollStatus(res.id);
+          pollStatus(res.job_id);
         } catch (err) {
           setResults((prev) => {
             const updated = [...prev];
@@ -146,7 +147,7 @@ export default function Upload() {
                     {result.status === "completed" && (
                       <CheckCircleIcon className="h-5 w-5 text-success-500" />
                     )}
-                    {(result.status === "pending" || result.status === "processing" || result.status === "uploading") && (
+                    {(result.status === "pending" || result.status === "queued" || result.status === "processing" || result.status === "uploading") && (
                       <TimeIcon className="h-5 w-5 text-warning-500 animate-spin" />
                     )}
                     {(result.status === "failed" || result.status === "error") && (

@@ -7,9 +7,9 @@ import {
   HorizontaLDots,
   DocsIcon,
   PlusIcon,
-  UserCircleIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "../auth/AuthContext";
 
 
 type NavItem = {
@@ -35,15 +35,11 @@ const navItems: NavItem[] = [
     name: "Documents",
     path: "/documents",
   },
-  {
-    icon: <UserCircleIcon />,
-    name: "Login",
-    path: "/login",
-  },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { logout, user } = useAuth();
   const location = useLocation();
 
   const [openSubmenu, setOpenSubmenu] = useState<{
@@ -278,9 +274,31 @@ const AppSidebar: React.FC = () => {
           </div>
         </nav>
 
+        <div className="mt-auto border-t border-gray-200 pt-4 dark:border-gray-800">
+          {(isExpanded || isHovered || isMobileOpen) && user && (
+            <div className="mb-3 px-3 text-xs text-gray-500 dark:text-gray-400">
+              <p className="truncate font-medium text-gray-700 dark:text-gray-200">{user.name}</p>
+              <p className="truncate">{user.email}</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={logout}
+            className={`menu-item group w-full menu-item-inactive ${
+              !isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"
+            }`}
+          >
+            <span className="menu-item-icon-size menu-item-icon-inactive">↩</span>
+            {(isExpanded || isHovered || isMobileOpen) && (
+              <span className="menu-item-text">Logout</span>
+            )}
+          </button>
+        </div>
+
       </div>
     </aside>
   );
 };
 
 export default AppSidebar;
+

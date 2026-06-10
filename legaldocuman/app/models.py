@@ -14,6 +14,14 @@ class DocumentStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class DocumentJobStatus(str, enum.Enum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     REVIEWER = "reviewer"
@@ -131,3 +139,24 @@ class AuditEvent(db.Model):
     tenant = db.relationship("Tenant")
     user = db.relationship("User")
     document = db.relationship("Document")
+
+
+
+class DocumentJob(db.Model):
+    __tablename__ = "document_jobs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True, index=True)
+    status = db.Column(db.Enum(DocumentJobStatus), default=DocumentJobStatus.PENDING, nullable=False)
+    backend = db.Column(db.String(50), nullable=False)
+    attempts = db.Column(db.Integer, default=0, nullable=False)
+    max_attempts = db.Column(db.Integer, default=3, nullable=False)
+    last_error = db.Column(db.Text)
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    document = db.relationship("Document", backref="jobs")
+    tenant = db.relationship("Tenant")

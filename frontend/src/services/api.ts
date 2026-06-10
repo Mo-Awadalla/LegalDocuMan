@@ -1,6 +1,16 @@
 const BASE_URL = "/api/v1";
 const API_KEY = import.meta.env.VITE_API_KEY || "";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export function getAuthToken(): string {
   return localStorage.getItem("legaldocuman_token") || "";
 }
@@ -9,6 +19,19 @@ function authHeaders(): HeadersInit {
   const token = getAuthToken();
   if (token) return { Authorization: `Bearer ${token}` };
   return API_KEY ? { "X-API-Key": API_KEY } : {};
+}
+
+export interface CurrentUser {
+  id: number;
+  email: string;
+  name: string;
+  role: "admin" | "reviewer" | "user";
+  tenant_id: number;
+}
+
+export interface CurrentUserResponse {
+  user: CurrentUser | null;
+  auth_mode?: string;
 }
 
 export interface Document {
@@ -73,13 +96,31 @@ export interface DocumentStats {
 
 export interface UploadResponse {
   id: number;
+  job_id: number;
   status: string;
+  job_status: string;
+}
+
+export interface DocumentJob {
+  id: number;
+  document_id: number;
+  tenant_id: number | null;
+  status: "pending" | "queued" | "processing" | "completed" | "failed";
+  backend: string;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  document: Document | null;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+    throw new ApiError(error.error || `HTTP ${response.status}`, response.status);
   }
   return response.json();
 }
@@ -90,13 +131,18 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await handleResponse<{ token: string; user: { id: number; email: string; name: string; role: string } }>(response);
+  const data = await handleResponse<{ token: string; user: CurrentUser }>(response);
   localStorage.setItem("legaldocuman_token", data.token);
   return data;
 }
 
 export function logout() {
   localStorage.removeItem("legaldocuman_token");
+}
+
+export async function getCurrentUser(): Promise<CurrentUserResponse> {
+  const response = await fetch(`${BASE_URL}/auth/me`, { headers: authHeaders() });
+  return handleResponse<CurrentUserResponse>(response);
 }
 
 export async function uploadDocument(file: File): Promise<UploadResponse> {
@@ -154,9 +200,9 @@ export async function getDocumentStats(): Promise<DocumentStats> {
   return handleResponse<DocumentStats>(response);
 }
 
-export async function getJobStatus(id: number): Promise<Document> {
+export async function getJobStatus(id: number): Promise<DocumentJob> {
   const response = await fetch(`${BASE_URL}/jobs/${id}`, { headers: authHeaders() });
-  return handleResponse<Document>(response);
+  return handleResponse<DocumentJob>(response);
 }
 
 export function getDocumentDownloadUrl(id: number): string {

@@ -27,6 +27,7 @@ def init_app_config(app):
     app.config["BOOTSTRAP_TENANT_NAME"] = os.environ.get("BOOTSTRAP_TENANT_NAME", "Default Tenant")
     app.config["CORS_ORIGINS"] = os.environ.get("CORS_ORIGINS", "")
     app.config["AUTO_CREATE_DB"] = os.environ.get("AUTO_CREATE_DB", "1").lower() in {"1", "true", "yes"}
+    app.config["ALLOW_OPEN_DEV_MODE"] = os.environ.get("ALLOW_OPEN_DEV_MODE", "0").lower() in {"1", "true", "yes"}
     app.config["JOB_BACKEND"] = os.environ.get("JOB_BACKEND", "thread").lower()
     app.config["MALWARE_SCANNER"] = os.environ.get("MALWARE_SCANNER", "builtin").lower()
     app.config["CLAMSCAN_PATH"] = os.environ.get("CLAMSCAN_PATH", "clamscan")

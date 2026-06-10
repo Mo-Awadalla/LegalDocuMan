@@ -184,7 +184,7 @@ curl -X POST http://localhost:5000/api/v1/upload \
 
 Response:
 ```json
-{"id": 1, "status": "pending"}
+{"id": 1, "job_id": 1, "status": "pending", "job_status": "completed"}
 ```
 
 **Check job status:**
