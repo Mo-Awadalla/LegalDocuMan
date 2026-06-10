@@ -24,6 +24,8 @@ def create_app():
     if app.config.get("AUTO_CREATE_DB"):
         with app.app_context():
             from . import models  # noqa: F401
+            from .auth import bootstrap_default_identity
             db.create_all()
+            bootstrap_default_identity()
 
     return app

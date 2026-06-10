@@ -15,24 +15,61 @@ services:
       timeout: 3s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+
   app:
     build: .
     ports:
       - "5000:5000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/legaldocuman
+      DATABASE_URL: postgresql://postgres:***@db:5432/legaldocuman
+      REDIS_URL: redis://redis:6379/0
+      JOB_BACKEND: rq
       SECRET_KEY: change-me-in-production
+      API_KEY: change-me-in-production
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: change-me-in-production
+      PROCESSED_FOLDER: /project/processed
+      UPLOAD_FOLDER: /project/uploads
+      CORS_ORIGINS: http://localhost:5000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - processed:/project/processed
+      - uploads:/project/uploads
+    command: sh -c "flask --app run.py db upgrade && python run.py"
+
+  worker:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:***@db:5432/legaldocuman
+      REDIS_URL: redis://redis:6379/0
+      JOB_BACKEND: rq
+      SECRET_KEY: change-me-in-production
+      API_KEY: change-me-in-production
       PROCESSED_FOLDER: /project/processed
       UPLOAD_FOLDER: /project/uploads
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - processed:/project/processed
       - uploads:/project/uploads
-    command: python run.py
+    command: python -m legaldocuman.app.worker
 
 volumes:
   pgdata:
+  redisdata:
   processed:
   uploads:

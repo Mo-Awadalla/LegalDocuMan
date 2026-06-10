@@ -6,6 +6,7 @@ import Home from "./pages/Dashboard/Home";
 import Upload from "./pages/Documents/Upload";
 import DocumentsList from "./pages/Documents/DocumentsList";
 import DocumentDetail from "./pages/Documents/DocumentDetail";
+import Login from "./pages/Auth/Login";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/upload" element={<Upload />} />
             <Route path="/documents" element={<DocumentsList />} />
             <Route path="/documents/:id" element={<DocumentDetail />} />
+            <Route path="/login" element={<Login />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
