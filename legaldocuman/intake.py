@@ -71,6 +71,8 @@ class DocumentIntake:
             vendor_name = self.vendor_extractor.extract_vendor_from_folder(vendor_folder)
             if not vendor_name:
                 vendor_name = self.vendor_extractor.extract_vendor_from_text(text_content)
+            if not vendor_name:
+                vendor_name = self.vendor_extractor.extract_vendor_from_filename(filename)
             if self.vendor_extractor.vendor_master_list:
                 vendor_name, _ = self.vendor_extractor.match_vendor_against_master_list(vendor_name)
             clean_vendor = clean_vendor_for_filename(vendor_name)

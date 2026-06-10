@@ -9,8 +9,9 @@ import {
   TimeIcon,
   AlertIcon,
   FolderIcon,
+  DownloadIcon,
 } from "../../icons";
-import { getDocument, type DocumentDetail as DocDetail } from "../../services/api";
+import { getDocument, getDocumentDownloadUrl, type DocumentDetail as DocDetail } from "../../services/api";
 
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
@@ -126,6 +127,15 @@ export default function DocumentDetail() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {doc.status === "completed" && (
+                    <a
+                      href={getDocumentDownloadUrl(doc.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                      <DownloadIcon className="h-4 w-4" />
+                      Download
+                    </a>
+                  )}
                   <StatusIcon status={doc.status} />
                   <Badge
                     color={

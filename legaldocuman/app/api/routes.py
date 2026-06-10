@@ -1,10 +1,12 @@
 import os
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_file
 from sqlalchemy import func
+from werkzeug.utils import secure_filename
 
 from legaldocuman.storage import LocalStorageBackend
 
+from ..auth import api_auth_required
 from ..extensions import db
 from ..models import Document, DocumentStatus
 from ..processors.worker import process_document_async
@@ -35,6 +37,7 @@ def _doc_to_dict(doc):
 
 
 @api_bp.route("/upload", methods=["POST"])
+@api_auth_required
 def upload_file():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -43,16 +46,20 @@ def upload_file():
     if not file.filename:
         return jsonify({"error": "No file selected"}), 400
 
-    ext = os.path.splitext(file.filename)[1].lower()
+    original_name = secure_filename(file.filename)
+    if not original_name:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    ext = os.path.splitext(original_name)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({"error": f"Unsupported file type: {ext}"}), 400
 
     storage = LocalStorageBackend(current_app.config["UPLOAD_FOLDER"])
-    filepath = storage.save(file, file.filename)
+    filepath = storage.save(file, original_name)
     checksum = Document.compute_checksum(filepath)
 
     doc = Document(
-        original_name=file.filename,
+        original_name=original_name,
         stored_path=filepath,
         file_size=os.path.getsize(filepath),
         checksum=checksum,
@@ -66,6 +73,7 @@ def upload_file():
 
 
 @api_bp.route("/jobs/<int:doc_id>")
+@api_auth_required
 def job_status(doc_id):
     doc = db.session.get(Document, doc_id)
     if not doc:
@@ -75,6 +83,7 @@ def job_status(doc_id):
 
 
 @api_bp.route("/documents")
+@api_auth_required
 def list_documents():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
@@ -113,6 +122,7 @@ def list_documents():
 
 
 @api_bp.route("/documents/<int:doc_id>")
+@api_auth_required
 def get_document(doc_id):
     doc = db.session.get(Document, doc_id)
     if not doc:
@@ -123,7 +133,21 @@ def get_document(doc_id):
     return jsonify(result)
 
 
+@api_bp.route("/documents/<int:doc_id>/download")
+@api_auth_required
+def download_document(doc_id):
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+    if not os.path.exists(doc.stored_path):
+        return jsonify({"error": "Stored file not found"}), 404
+
+    download_name = doc.generated_filename or doc.original_name
+    return send_file(doc.stored_path, as_attachment=True, download_name=download_name)
+
+
 @api_bp.route("/documents/stats")
+@api_auth_required
 def document_stats():
     total = Document.query.count()
     by_status = dict(

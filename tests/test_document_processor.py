@@ -170,10 +170,10 @@ class TestDocumentStatusClassifier:
         text = "Witnessed by: Jane Doe, Notary Public"
         assert dsc.classify_status("contract.pdf", text) == "final"
 
-    def test_final_with_signature_block(self):
+    def test_blank_signature_block_is_supporting(self):
         dsc = DocumentStatusClassifier()
         text = "By: _________________    Date: ___________"
-        assert dsc.classify_status("contract.pdf", text) == "final"
+        assert dsc.classify_status("contract.pdf", text) == "supporting"
 
     def test_supporting_without_signatures(self):
         dsc = DocumentStatusClassifier()

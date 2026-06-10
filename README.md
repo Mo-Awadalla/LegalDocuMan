@@ -45,6 +45,62 @@ cd LegalDocuMan
 pip install -r requirements.txt
 ```
 
+### Quick local development (no Docker)
+
+For the fastest non-Docker loop, run the Flask app with SQLite:
+
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt
+DATABASE_URL=sqlite:///legaldocuman.db \
+UPLOAD_FOLDER=./uploads \
+PROCESSED_FOLDER=./processed \
+SECRET_KEY=dev-local-secret \
+.venv/Scripts/python run.py
+```
+
+Open `http://localhost:5000`. Build the React app first if you want Flask to serve the latest frontend:
+
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+SQLite is for local development only. Use PostgreSQL for shared environments and pilots.
+
+### Pilot deployment hardening switches
+
+Set these before sharing an instance with anyone else:
+
+```bash
+SECRET_KEY=<strong-random-secret>
+API_KEY=<private-pilot-api-key>
+CORS_ORIGINS=https://your-domain.example
+JOB_BACKEND=rq
+REDIS_URL=redis://localhost:6379/0
+AUTO_CREATE_DB=0
+```
+
+With `API_KEY` set, API clients must send `X-API-Key: <key>` or
+`Authorization: Bearer <key>`. Browser downloads may also use `?api_key=<key>`.
+For a simple private pilot frontend build, set `VITE_API_KEY=<key>` before
+`npm run build`.
+
+For durable background processing, use Redis Queue and run a worker:
+
+```bash
+rq worker documents
+```
+
+For database schema management, use Flask-Migrate/Alembic instead of relying on
+startup table creation:
+
+```bash
+AUTO_CREATE_DB=0 flask --app run.py db upgrade
+```
+
 ### Prerequisites
 
 **Tesseract OCR + Poppler** (required for PDF text extraction):
@@ -59,9 +115,10 @@ sudo apt-get install tesseract-ocr poppler-utils
 # Then set the path in .env: TESSERACT_PATH=C:\\Program Files\\Tesseract-OCR\\tesseract.exe
 ```
 
-**NVIDIA OCR** (optional, requires API key in `.env`):
+**NVIDIA OCR** (interface only; implementation still required before use):
 ```bash
-# Uncomment requests in requirements.txt, then:
+# The backend intentionally reports unavailable until image_to_text/pdf_to_text
+# are implemented with a real NVIDIA client.
 export OCR_BACKEND=nvidia
 export NVIDIA_API_KEY=nvapi-your-key-here
 ```

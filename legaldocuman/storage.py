@@ -3,6 +3,8 @@ import shutil
 import uuid
 from abc import ABC, abstractmethod
 
+from werkzeug.utils import secure_filename
+
 
 class StorageBackend(ABC):
     @abstractmethod
@@ -25,13 +27,14 @@ class StorageBackend(ABC):
 
 class LocalStorageBackend(StorageBackend):
     def __init__(self, base_dir):
-        self.base_dir = base_dir
+        self.base_dir = os.path.abspath(base_dir)
         os.makedirs(self.base_dir, exist_ok=True)
 
     def save(self, fileobj, filename):
         job_dir = os.path.join(self.base_dir, str(uuid.uuid4()))
         os.makedirs(job_dir, exist_ok=True)
-        dest = os.path.join(job_dir, filename)
+        safe_name = secure_filename(filename) or "upload"
+        dest = os.path.join(job_dir, safe_name)
         fileobj.save(dest)
         return dest
 

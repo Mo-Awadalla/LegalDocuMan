@@ -1,4 +1,9 @@
 const BASE_URL = "/api/v1";
+const API_KEY = import.meta.env.VITE_API_KEY || "";
+
+function authHeaders(): HeadersInit {
+  return API_KEY ? { "X-API-Key": API_KEY } : {};
+}
 
 export interface Document {
   id: number;
@@ -55,13 +60,14 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
   formData.append("file", file);
   const response = await fetch(`${BASE_URL}/upload`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
   return handleResponse<UploadResponse>(response);
 }
 
 export async function getDocument(id: number): Promise<DocumentDetail> {
-  const response = await fetch(`${BASE_URL}/documents/${id}`);
+  const response = await fetch(`${BASE_URL}/documents/${id}`, { headers: authHeaders() });
   return handleResponse<DocumentDetail>(response);
 }
 
@@ -81,16 +87,21 @@ export async function listDocuments(params?: {
   if (params?.vendor) searchParams.set("vendor", params.vendor);
   if (params?.search) searchParams.set("search", params.search);
 
-  const response = await fetch(`${BASE_URL}/documents?${searchParams}`);
+  const response = await fetch(`${BASE_URL}/documents?${searchParams}`, { headers: authHeaders() });
   return handleResponse<DocumentListResponse>(response);
 }
 
 export async function getDocumentStats(): Promise<DocumentStats> {
-  const response = await fetch(`${BASE_URL}/documents/stats`);
+  const response = await fetch(`${BASE_URL}/documents/stats`, { headers: authHeaders() });
   return handleResponse<DocumentStats>(response);
 }
 
 export async function getJobStatus(id: number): Promise<Document> {
-  const response = await fetch(`${BASE_URL}/jobs/${id}`);
+  const response = await fetch(`${BASE_URL}/jobs/${id}`, { headers: authHeaders() });
   return handleResponse<Document>(response);
+}
+
+export function getDocumentDownloadUrl(id: number): string {
+  const query = API_KEY ? `?api_key=${encodeURIComponent(API_KEY)}` : "";
+  return `${BASE_URL}/documents/${id}/download${query}`;
 }
