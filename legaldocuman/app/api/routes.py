@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
@@ -9,7 +9,7 @@ from legaldocuman.storage import get_storage_backend
 
 from ..auth import audit, auth_required, current_tenant_id, current_user, issue_token
 from ..extensions import db
-from ..models import AuditEvent, Document, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
+from ..models import AuditEvent, Document, DocumentJob, DocumentJobStatus, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
 from ..processors.worker import process_document_async
 from ..security import MalwareScanner
 
@@ -65,6 +65,25 @@ def _doc_to_dict(doc):
         "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
     }
 
+
+
+
+def _job_to_dict(job):
+    return {
+        "id": job.id,
+        "document_id": job.document_id,
+        "tenant_id": job.tenant_id,
+        "status": job.status.value,
+        "backend": job.backend,
+        "attempts": job.attempts,
+        "max_attempts": job.max_attempts,
+        "last_error": job.last_error,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+        "document": _doc_to_dict(job.document) if job.document else None,
+    }
 
 def _audit_to_dict(event):
     return {
@@ -189,21 +208,35 @@ def upload_file():
     )
     db.session.add(doc)
     db.session.flush()
-    audit("document.upload", document_id=doc.id, details={"filename": original_name, "storage_backend": storage.name})
+    job = DocumentJob(
+        document_id=doc.id,
+        tenant_id=doc.tenant_id,
+        backend=current_app.config.get("JOB_BACKEND", "thread"),
+        status=DocumentJobStatus.PENDING,
+    )
+    db.session.add(job)
+    db.session.flush()
+    audit("document.upload", document_id=doc.id, details={"filename": original_name, "storage_backend": storage.name, "job_id": job.id})
     db.session.commit()
 
-    process_document_async(doc.id)
+    process_document_async(job.id)
+    db.session.refresh(doc)
+    db.session.refresh(job)
 
-    return jsonify({"id": doc.id, "status": doc.status.value}), 201
+    return jsonify({"id": doc.id, "job_id": job.id, "status": doc.status.value, "job_status": job.status.value}), 201
 
 
-@api_bp.route("/jobs/<int:doc_id>")
+@api_bp.route("/jobs/<int:job_id>")
 @auth_required()
-def job_status(doc_id):
-    doc = _get_doc_or_404(doc_id)
-    if not doc:
-        return jsonify({"error": "Document not found"}), 404
-    return jsonify(_doc_to_dict(doc))
+def job_status(job_id):
+    query = DocumentJob.query.filter(DocumentJob.id == job_id)
+    tenant_id = current_tenant_id()
+    if tenant_id:
+        query = query.filter(DocumentJob.tenant_id == tenant_id)
+    job = query.first()
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(_job_to_dict(job))
 
 
 @api_bp.route("/documents")

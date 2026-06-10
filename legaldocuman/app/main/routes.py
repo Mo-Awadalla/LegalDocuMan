@@ -1,9 +1,9 @@
 import os
 
-from flask import Blueprint, current_app, render_template, send_from_directory, send_file
+from flask import Blueprint, jsonify, render_template, send_from_directory, send_file
+from sqlalchemy import text
 
 from ..extensions import db
-from ..models import Document
 
 main_bp = Blueprint("main", __name__)
 
@@ -37,17 +37,15 @@ def spa_routes(**kwargs):
     return _serve_spa()
 
 
-@main_bp.route("/jobs")
-def jobs():
-    docs = db.session.execute(
-        db.select(Document).order_by(Document.created_at.desc())
-    ).scalars().all()
-    return render_template("jobs.html", documents=docs)
+@main_bp.route("/healthz")
+def healthz():
+    return jsonify({"status": "ok"})
 
 
-@main_bp.route("/jobs/<int:doc_id>")
-def job_detail(doc_id):
-    doc = db.session.get(Document, doc_id)
-    if not doc:
-        return render_template("job_detail.html", error="Document not found"), 404
-    return render_template("job_detail.html", document=doc)
+@main_bp.route("/readyz")
+def readyz():
+    try:
+        db.session.execute(text("select 1"))
+    except Exception as exc:
+        return jsonify({"status": "error", "database": str(exc)}), 503
+    return jsonify({"status": "ok", "database": "ok"})

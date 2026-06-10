@@ -18,6 +18,7 @@ def _make_app(tmp_path, monkeypatch):
     monkeypatch.setenv("UPLOAD_FOLDER", str(upload_dir))
     monkeypatch.setenv("PROCESSED_FOLDER", str(processed_dir))
     monkeypatch.setenv("SECRET_KEY", "test-secret")
+    monkeypatch.setenv("ALLOW_OPEN_DEV_MODE", "1")
 
     import legaldocuman.app.api.routes as api_routes
     monkeypatch.setattr(api_routes, "process_document_async", STATIC_UPLOAD)

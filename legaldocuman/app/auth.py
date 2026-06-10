@@ -95,7 +95,7 @@ def _api_key_is_valid() -> bool:
 
 
 def _legacy_open_dev_mode() -> bool:
-    return not _configured_api_key() and User.query.count() == 0
+    return bool(current_app.config.get("ALLOW_OPEN_DEV_MODE")) and not _configured_api_key() and User.query.count() == 0
 
 
 def auth_required(roles: Iterable[UserRole | str] | None = None):

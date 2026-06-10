@@ -11,6 +11,7 @@ import {
   FolderIcon,
   DownloadIcon,
 } from "../../icons";
+import { useAuth } from "../../auth/AuthContext";
 import { getDocument, getDocumentAudit, getDocumentDownloadUrl, updateDocument, type AuditEvent, type DocumentDetail as DocDetail } from "../../services/api";
 
 function StatusIcon({ status }: { status: string }) {
@@ -40,6 +41,8 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function DocumentDetail() {
   const { id } = useParams<{ id: string }>();
+  const { hasRole } = useAuth();
+  const canReview = hasRole(["admin", "reviewer"]);
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,11 +73,13 @@ export default function DocumentDetail() {
           expiration_date: loaded.expiration_date || "",
           review_notes: loaded.review_notes || "",
         });
-        getDocumentAudit(Number(id)).then((data) => setAuditEvents(data.events)).catch(() => {});
+        if (canReview) {
+          getDocumentAudit(Number(id)).then((data) => setAuditEvents(data.events)).catch(() => {});
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, canReview]);
 
   useEffect(() => {
     if (!doc || !id) return;
@@ -236,10 +241,11 @@ export default function DocumentDetail() {
             </div>
 
 
-            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-800 dark:text-white/90">Manual Review</h3>
+            {canReview && (
+              <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-800 dark:text-white/90">Manual Review</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Correct extracted fields and mark the document reviewed.</p>
                 </div>
                 <Badge color={doc.review_status === "reviewed" ? "success" : doc.review_status === "needs_review" ? "warning" : "light"} variant="light">
@@ -283,7 +289,8 @@ export default function DocumentDetail() {
                   Mark Reviewed
                 </button>
               </div>
-            </div>
+              </div>
+            )}
 
             {doc.error_message && (
               <div className="rounded-xl border border-error-200 bg-error-50 p-5 dark:border-error-500/20 dark:bg-error-500/10">
@@ -297,8 +304,9 @@ export default function DocumentDetail() {
           </div>
 
 
-            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-              <h3 className="text-sm font-medium text-gray-800 dark:text-white/90 mb-4">Audit Trail</h3>
+            {canReview && (
+              <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-white/90 mb-4">Audit Trail</h3>
               {auditEvents.length ? (
                 <div className="flex flex-col gap-3">
                   {auditEvents.slice(0, 8).map((event) => (
@@ -311,7 +319,8 @@ export default function DocumentDetail() {
               ) : (
                 <p className="text-sm text-gray-500">No audit events visible</p>
               )}
-            </div>
+              </div>
+            )}
 
           {doc.metadata_json && (
             <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -347,3 +356,4 @@ export default function DocumentDetail() {
     </>
   );
 }
+

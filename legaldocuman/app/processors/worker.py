@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import current_app
 
@@ -13,53 +13,63 @@ from legaldocuman.utils import resolve_filename_conflict
 
 from ..auth import audit
 from ..extensions import db
-from ..models import Document, DocumentStatus, ReviewStatus
+from ..models import Document, DocumentJob, DocumentJobStatus, DocumentStatus, ReviewStatus
 
 
-def process_document_async(doc_id):
+def process_document_async(job_id):
     backend = current_app.config.get("JOB_BACKEND", "thread")
     if backend == "sync":
-        return process_document_job(doc_id)
+        return process_document_job(job_id)
     if backend == "rq":
-        return _enqueue_rq(doc_id)
+        return _enqueue_rq(job_id)
     app = current_app._get_current_object()
-    thread = threading.Thread(target=_process_with_app, args=(app, doc_id), daemon=True)
+    _mark_queued(job_id)
+    thread = threading.Thread(target=_process_with_app, args=(app, job_id), daemon=True)
     thread.start()
     return thread
 
 
-def _enqueue_rq(doc_id):
+def _enqueue_rq(job_id):
     try:
         from redis import Redis
         from rq import Queue
     except ImportError as exc:
-        _mark_failed(doc_id, "RQ backend requires redis and rq packages")
+        _mark_failed(job_id, "RQ backend requires redis and rq packages")
         raise RuntimeError("RQ backend requires redis and rq packages") from exc
 
+    _mark_queued(job_id)
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     queue_name = os.environ.get("RQ_QUEUE", "documents")
     queue = Queue(queue_name, connection=Redis.from_url(redis_url))
-    return queue.enqueue("legaldocuman.app.processors.worker.process_document_job", doc_id)
+    return queue.enqueue("legaldocuman.app.processors.worker.process_document_job", job_id)
 
 
-def process_document_job(doc_id):
+def process_document_job(job_id):
     from .. import create_app
 
     app = create_app()
-    return _process_with_app(app, doc_id)
+    return _process_with_app(app, job_id)
 
 
-def _process_with_app(app, doc_id):
+def _process_with_app(app, job_id):
     with app.app_context():
-        return _process_document(doc_id)
+        return _process_document(job_id)
 
 
-def _process_document(doc_id):
-    doc = db.session.get(Document, doc_id)
+def _process_document(job_id):
+    job = db.session.get(DocumentJob, job_id)
+    if not job:
+        return None
+    doc = db.session.get(Document, job.document_id)
     if not doc:
+        _mark_failed(job_id, "Document not found")
         return None
 
     try:
+        job.status = DocumentJobStatus.PROCESSING
+        job.attempts += 1
+        job.started_at = datetime.now(timezone.utc)
+        job.last_error = None
         doc.status = DocumentStatus.PROCESSING
         doc.error_message = None
         db.session.commit()
@@ -120,24 +130,42 @@ def _process_document(doc_id):
         if record.signature_analysis and record.signature_analysis.get("review_required"):
             doc.review_status = ReviewStatus.NEEDS_REVIEW
         doc.status = DocumentStatus.COMPLETED
-        audit("document.processed", document_id=doc.id, details={"status": record.status, "type": record.doc_type})
+        job.status = DocumentJobStatus.COMPLETED
+        job.finished_at = datetime.now(timezone.utc)
+        audit("document.processed", document_id=doc.id, details={"status": record.status, "type": record.doc_type, "job_id": job.id})
         db.session.commit()
         return doc.id
 
     except Exception as e:
-        logging.error("Processing failed for document %s: %s", doc_id, e)
+        logging.error("Processing failed for job %s / document %s: %s", job_id, doc.id, e)
         doc.status = DocumentStatus.FAILED
         doc.error_message = str(e)
+        job.status = DocumentJobStatus.FAILED
+        job.last_error = str(e)
+        job.finished_at = datetime.now(timezone.utc)
         db.session.commit()
         return None
 
 
-def _mark_failed(doc_id, message):
-    doc = db.session.get(Document, doc_id)
-    if not doc:
+def _mark_queued(job_id):
+    job = db.session.get(DocumentJob, job_id)
+    if not job:
         return
-    doc.status = DocumentStatus.FAILED
-    doc.error_message = message
+    job.status = DocumentJobStatus.QUEUED
+    db.session.commit()
+
+
+def _mark_failed(job_id, message):
+    job = db.session.get(DocumentJob, job_id)
+    if not job:
+        return
+    doc = db.session.get(Document, job.document_id)
+    job.status = DocumentJobStatus.FAILED
+    job.last_error = message
+    job.finished_at = datetime.now(timezone.utc)
+    if doc:
+        doc.status = DocumentStatus.FAILED
+        doc.error_message = message
     db.session.commit()
 
 
