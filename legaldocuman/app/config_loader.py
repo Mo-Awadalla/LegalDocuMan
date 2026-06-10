@@ -20,6 +20,17 @@ def init_app_config(app):
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["API_KEY"] = os.environ.get("API_KEY", "")
+    app.config["AUTH_TOKEN_TTL_SECONDS"] = int(os.environ.get("AUTH_TOKEN_TTL_SECONDS", "86400"))
+    app.config["BOOTSTRAP_ADMIN_EMAIL"] = os.environ.get("BOOTSTRAP_ADMIN_EMAIL", "")
+    app.config["BOOTSTRAP_ADMIN_PASSWORD"] = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
+    app.config["BOOTSTRAP_ADMIN_NAME"] = os.environ.get("BOOTSTRAP_ADMIN_NAME", "Admin")
+    app.config["BOOTSTRAP_TENANT_NAME"] = os.environ.get("BOOTSTRAP_TENANT_NAME", "Default Tenant")
     app.config["CORS_ORIGINS"] = os.environ.get("CORS_ORIGINS", "")
     app.config["AUTO_CREATE_DB"] = os.environ.get("AUTO_CREATE_DB", "1").lower() in {"1", "true", "yes"}
     app.config["JOB_BACKEND"] = os.environ.get("JOB_BACKEND", "thread").lower()
+    app.config["MALWARE_SCANNER"] = os.environ.get("MALWARE_SCANNER", "builtin").lower()
+    app.config["CLAMSCAN_PATH"] = os.environ.get("CLAMSCAN_PATH", "clamscan")
+    app.config["STORAGE_BACKEND"] = os.environ.get("STORAGE_BACKEND", "local").lower()
+    app.config["S3_BUCKET"] = os.environ.get("S3_BUCKET", "")
+    app.config["S3_PREFIX"] = os.environ.get("S3_PREFIX", "uploads")
+    app.config["S3_REGION"] = os.environ.get("S3_REGION", "")

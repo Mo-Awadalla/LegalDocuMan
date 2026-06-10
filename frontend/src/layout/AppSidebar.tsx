@@ -7,6 +7,7 @@ import {
   HorizontaLDots,
   DocsIcon,
   PlusIcon,
+  UserCircleIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 
@@ -33,6 +34,11 @@ const navItems: NavItem[] = [
     icon: <DocsIcon />,
     name: "Documents",
     path: "/documents",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Login",
+    path: "/login",
   },
 ];
 

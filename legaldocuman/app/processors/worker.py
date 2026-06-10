@@ -8,27 +8,20 @@ from flask import current_app
 
 from legaldocuman.config import Config
 from legaldocuman.intake import DocumentIntake
+from legaldocuman.storage import get_storage_backend, local_file_for_processing
 from legaldocuman.utils import resolve_filename_conflict
 
+from ..auth import audit
 from ..extensions import db
-from ..models import Document, DocumentStatus
+from ..models import Document, DocumentStatus, ReviewStatus
 
 
 def process_document_async(doc_id):
-    """Submit document processing using the configured job backend.
-
-    JOB_BACKEND=thread (default): in-process daemon thread for local dev.
-    JOB_BACKEND=sync: run immediately, useful for tests and scripts.
-    JOB_BACKEND=rq: enqueue into Redis/RQ for pilot/production workers.
-    """
     backend = current_app.config.get("JOB_BACKEND", "thread")
-
     if backend == "sync":
         return process_document_job(doc_id)
-
     if backend == "rq":
         return _enqueue_rq(doc_id)
-
     app = current_app._get_current_object()
     thread = threading.Thread(target=_process_with_app, args=(app, doc_id), daemon=True)
     thread.start()
@@ -50,7 +43,6 @@ def _enqueue_rq(doc_id):
 
 
 def process_document_job(doc_id):
-    """RQ-safe job entrypoint."""
     from .. import create_app
 
     app = create_app()
@@ -74,7 +66,8 @@ def _process_document(doc_id):
 
         vendor_folder = os.path.basename(os.path.dirname(doc.stored_path))
         intake = DocumentIntake()
-        record = intake.analyze(doc.stored_path, vendor_folder)
+        with local_file_for_processing(doc.stored_path) as source_path:
+            record = intake.analyze(source_path, vendor_folder)
 
         if record.error:
             raise RuntimeError(record.error)
@@ -89,9 +82,7 @@ def _process_document(doc_id):
         if record.date_metadata.get("expiration_date"):
             doc.expiration_date = datetime.strptime(record.date_metadata["expiration_date"], "%Y-%m-%d").date()
 
-        generated_filename = intake.generate_filename_from_original(
-            record, doc.original_name, unique_id=doc.id
-        )
+        generated_filename = intake.generate_filename_from_original(record, doc.original_name, unique_id=doc.id)
         doc.metadata_json = {
             "document_type": record.doc_type,
             "execution_status": record.status,
@@ -104,23 +95,32 @@ def _process_document(doc_id):
 
         if record.status in ("final", "supporting"):
             vendor_folder = record.clean_vendor or "UnknownVendor"
-            target_dir = os.path.abspath(os.path.join(
-                Config.get().PROCESSED_FOLDER,
-                f"{vendor_folder}_{record.status}",
-            ))
+            target_dir = os.path.abspath(os.path.join(Config.get().PROCESSED_FOLDER, f"{vendor_folder}_{record.status}"))
             os.makedirs(target_dir, exist_ok=True)
+            target_path = resolve_filename_conflict(os.path.join(target_dir, generated_filename))
 
-            target_path = os.path.join(target_dir, generated_filename)
-            target_path = resolve_filename_conflict(target_path)
-            shutil.move(doc.stored_path, target_path)
+            with local_file_for_processing(doc.stored_path) as source_path:
+                shutil.copy2(source_path, target_path)
 
-            doc.stored_path = target_path
+            if doc.storage_backend == "s3":
+                stored_path = get_storage_backend().save_path(target_path, os.path.basename(target_path))
+                os.remove(target_path)
+            else:
+                if os.path.abspath(doc.stored_path) != os.path.abspath(target_path):
+                    shutil.move(doc.stored_path, target_path)
+                stored_path = target_path
+
+            doc.stored_path = stored_path
+            doc.storage_key = stored_path
             doc.generated_filename = os.path.basename(target_path)
             doc.processed_folder = record.status
         else:
             doc.generated_filename = generated_filename
 
+        if record.signature_analysis and record.signature_analysis.get("review_required"):
+            doc.review_status = ReviewStatus.NEEDS_REVIEW
         doc.status = DocumentStatus.COMPLETED
+        audit("document.processed", document_id=doc.id, details={"status": record.status, "type": record.doc_type})
         db.session.commit()
         return doc.id
 

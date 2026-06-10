@@ -11,7 +11,7 @@ import {
   FolderIcon,
   DownloadIcon,
 } from "../../icons";
-import { getDocument, getDocumentDownloadUrl, type DocumentDetail as DocDetail } from "../../services/api";
+import { getDocument, getDocumentAudit, getDocumentDownloadUrl, updateDocument, type AuditEvent, type DocumentDetail as DocDetail } from "../../services/api";
 
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
@@ -43,12 +43,35 @@ export default function DocumentDetail() {
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [form, setForm] = useState({
+    document_type: "",
+    vendor: "",
+    execution_status: "",
+    retention_category: "",
+    effective_date: "",
+    expiration_date: "",
+    review_notes: "",
+  });
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     getDocument(Number(id))
-      .then(setDoc)
+      .then((loaded) => {
+        setDoc(loaded);
+        setForm({
+          document_type: loaded.document_type || "",
+          vendor: loaded.vendor || "",
+          execution_status: loaded.execution_status || "",
+          retention_category: loaded.retention_category || "",
+          effective_date: loaded.effective_date || "",
+          expiration_date: loaded.expiration_date || "",
+          review_notes: loaded.review_notes || "",
+        });
+        getDocumentAudit(Number(id)).then((data) => setAuditEvents(data.events)).catch(() => {});
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -62,6 +85,27 @@ export default function DocumentDetail() {
       return () => clearTimeout(timer);
     }
   }, [doc, id]);
+
+
+  const saveReview = async (markReviewed = false) => {
+    if (!doc) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateDocument(doc.id, { ...form, mark_reviewed: markReviewed });
+      setDoc(updated);
+      const audit = await getDocumentAudit(doc.id).catch(() => ({ events: [] }));
+      setAuditEvents(audit.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save review");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setField = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
   if (loading) {
     return (
@@ -191,6 +235,56 @@ export default function DocumentDetail() {
               </div>
             </div>
 
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-800 dark:text-white/90">Manual Review</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Correct extracted fields and mark the document reviewed.</p>
+                </div>
+                <Badge color={doc.review_status === "reviewed" ? "success" : doc.review_status === "needs_review" ? "warning" : "light"} variant="light">
+                  {doc.review_status.replace("_", " ")}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {([
+                  ["document_type", "Document Type"],
+                  ["vendor", "Vendor"],
+                  ["execution_status", "Execution Status"],
+                  ["retention_category", "Retention Category"],
+                  ["effective_date", "Effective Date"],
+                  ["expiration_date", "Expiration Date"],
+                ] as [keyof typeof form, string][]).map(([field, label]) => (
+                  <label key={field} className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+                    {label}
+                    <input
+                      value={form[field]}
+                      onChange={(e) => setField(field, e.target.value)}
+                      placeholder={field.endsWith("date") ? "YYYY-MM-DD" : ""}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    />
+                  </label>
+                ))}
+              </div>
+              <label className="mt-3 flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+                Review Notes
+                <textarea
+                  value={form.review_notes}
+                  onChange={(e) => setField("review_notes", e.target.value)}
+                  rows={3}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                />
+              </label>
+              <div className="mt-4 flex gap-2">
+                <button onClick={() => saveReview(false)} disabled={saving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300">
+                  Save Corrections
+                </button>
+                <button onClick={() => saveReview(true)} disabled={saving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
+                  Mark Reviewed
+                </button>
+              </div>
+            </div>
+
             {doc.error_message && (
               <div className="rounded-xl border border-error-200 bg-error-50 p-5 dark:border-error-500/20 dark:bg-error-500/10">
                 <div className="flex items-center gap-2 mb-2">
@@ -201,6 +295,23 @@ export default function DocumentDetail() {
               </div>
             )}
           </div>
+
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+              <h3 className="text-sm font-medium text-gray-800 dark:text-white/90 mb-4">Audit Trail</h3>
+              {auditEvents.length ? (
+                <div className="flex flex-col gap-3">
+                  {auditEvents.slice(0, 8).map((event) => (
+                    <div key={event.id} className="border-b border-gray-100 pb-2 text-xs dark:border-gray-800">
+                      <p className="font-medium text-gray-800 dark:text-white/90">{event.action}</p>
+                      <p className="text-gray-500 dark:text-gray-400">{event.created_at ? new Date(event.created_at).toLocaleString() : ""}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No audit events visible</p>
+              )}
+            </div>
 
           {doc.metadata_json && (
             <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">

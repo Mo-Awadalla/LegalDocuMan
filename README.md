@@ -101,6 +101,28 @@ startup table creation:
 AUTO_CREATE_DB=0 flask --app run.py db upgrade
 ```
 
+
+### Customer-readiness features
+
+The app now includes the first customer-grade controls beyond the private API key gate:
+
+- User accounts with tenant scoping and roles: `admin`, `reviewer`, `user`.
+- Bootstrap the first admin with `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` before first startup.
+- Login endpoint: `POST /api/v1/auth/login`; use the returned bearer token for API calls.
+- Manual review/correction endpoint and UI on the document detail page.
+- Audit trail events for login, upload, processing, and manual updates.
+- Built-in malware scanning for empty/EICAR files, plus optional `MALWARE_SCANNER=clamav`.
+- Object storage abstraction with `STORAGE_BACKEND=s3` when `boto3` and AWS credentials are configured.
+- Redis/RQ worker process via `python -m legaldocuman.app.worker` and docker-compose `worker` service.
+
+For a shared deployment, use migrations and a queue worker:
+
+```bash
+AUTO_CREATE_DB=0 flask --app run.py db upgrade
+JOB_BACKEND=rq python run.py
+python -m legaldocuman.app.worker
+```
+
 ### Prerequisites
 
 **Tesseract OCR + Poppler** (required for PDF text extraction):
