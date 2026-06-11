@@ -21,6 +21,11 @@ def init_app_config(app):
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["API_KEY"] = os.environ.get("API_KEY", "")
     app.config["AUTH_TOKEN_TTL_SECONDS"] = int(os.environ.get("AUTH_TOKEN_TTL_SECONDS", "86400"))
+    app.config["DOWNLOAD_TOKEN_TTL_SECONDS"] = int(os.environ.get("DOWNLOAD_TOKEN_TTL_SECONDS", "300"))
+    app.config["RATE_LIMIT_ENABLED"] = os.environ.get("RATE_LIMIT_ENABLED", "1").lower() in {"1", "true", "yes"}
+    app.config["RATE_LIMIT_WINDOW_SECONDS"] = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    app.config["RATE_LIMIT_AUTH_PER_MINUTE"] = int(os.environ.get("RATE_LIMIT_AUTH_PER_MINUTE", "10"))
+    app.config["RATE_LIMIT_UPLOAD_PER_MINUTE"] = int(os.environ.get("RATE_LIMIT_UPLOAD_PER_MINUTE", "30"))
     app.config["BOOTSTRAP_ADMIN_EMAIL"] = os.environ.get("BOOTSTRAP_ADMIN_EMAIL", "")
     app.config["BOOTSTRAP_ADMIN_PASSWORD"] = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
     app.config["BOOTSTRAP_ADMIN_NAME"] = os.environ.get("BOOTSTRAP_ADMIN_NAME", "Admin")
