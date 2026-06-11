@@ -7,10 +7,11 @@ clamscan executable in the web/worker container.
 from __future__ import annotations
 
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from flask import current_app
+from flask import current_app, jsonify, request
 
 
 EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
@@ -55,3 +56,51 @@ class MalwareScanner:
         if completed.returncode == 1:
             return ScanResult("infected", output or "ClamAV detected malware")
         return ScanResult("error", output or f"ClamAV failed with exit code {completed.returncode}")
+
+
+def _client_key() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    ip = forwarded_for.split(",", 1)[0].strip() if forwarded_for else request.remote_addr
+    return ip or "unknown"
+
+
+def _rate_limited(app, bucket_name: str, limit: int) -> bool:
+    if not app.config.get("RATE_LIMIT_ENABLED", True) or limit <= 0:
+        return False
+    window = int(app.config.get("RATE_LIMIT_WINDOW_SECONDS", 60))
+    now = time.monotonic()
+    store = app.extensions.setdefault("legaldocuman_rate_limits", {})
+    key = (bucket_name, _client_key())
+    entries = [ts for ts in store.get(key, []) if now - ts < window]
+    if len(entries) >= limit:
+        store[key] = entries
+        return True
+    entries.append(now)
+    store[key] = entries
+    return False
+
+
+def init_security(app):
+    """Install simple in-memory rate limits and baseline security headers."""
+
+    @app.before_request
+    def enforce_basic_rate_limits():
+        if request.endpoint == "api.login":
+            if _rate_limited(app, "auth", int(app.config.get("RATE_LIMIT_AUTH_PER_MINUTE", 10))):
+                return jsonify({"error": "Too many requests"}), 429
+        if request.endpoint == "api.upload_file":
+            if _rate_limited(app, "upload", int(app.config.get("RATE_LIMIT_UPLOAD_PER_MINUTE", 30))):
+                return jsonify({"error": "Too many requests"}), 429
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        )
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        return response
