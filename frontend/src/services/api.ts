@@ -205,9 +205,11 @@ export async function getJobStatus(id: number): Promise<DocumentJob> {
   return handleResponse<DocumentJob>(response);
 }
 
-export function getDocumentDownloadUrl(id: number): string {
-  const token = getAuthToken();
-  const key = token || API_KEY;
-  const query = key ? `?api_key=${encodeURIComponent(key)}` : "";
-  return `${BASE_URL}/documents/${id}/download${query}`;
+export async function createDocumentDownloadUrl(id: number): Promise<string> {
+  const response = await fetch(`${BASE_URL}/documents/${id}/download-token`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  const data = await handleResponse<{ download_token: string; expires_in: number }>(response);
+  return `${BASE_URL}/documents/${id}/download?download_token=${encodeURIComponent(data.download_token)}`;
 }

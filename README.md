@@ -70,58 +70,55 @@ cd ..
 
 SQLite is for local development only. Use PostgreSQL for shared environments and pilots.
 
-### Pilot deployment hardening switches
+### Production and pilot environment guidance
 
-Set these before sharing an instance with anyone else:
+Local development can use SQLite and local `uploads/` / `processed/` folders. Do not use those defaults for shared pilots or production.
+
+Before sharing an instance, set explicit environment values:
 
 ```bash
 SECRET_KEY=<strong-random-secret>
 API_KEY=<private-pilot-api-key>
+DOWNLOAD_TOKEN_TTL_SECONDS=300
+RATE_LIMIT_ENABLED=1
+RATE_LIMIT_AUTH_PER_MINUTE=10
+RATE_LIMIT_UPLOAD_PER_MINUTE=30
 CORS_ORIGINS=https://your-domain.example
+DATABASE_URL=postgresql://user:password@db:5432/legaldocuman
+UPLOAD_FOLDER=/srv/legaldocuman/uploads
+PROCESSED_FOLDER=/srv/legaldocuman/processed
 JOB_BACKEND=rq
 REDIS_URL=redis://localhost:6379/0
 AUTO_CREATE_DB=0
 ```
 
-With `API_KEY` set, API clients must send `X-API-Key: <key>` or
-`Authorization: Bearer <key>`. Browser downloads may also use `?api_key=<key>`.
-For a simple private pilot frontend build, set `VITE_API_KEY=<key>` before
-`npm run build`.
+With `API_KEY` set, API clients must send `X-API-Key: API_KEY_VALUE` or `Authorization: Bearer API_KEY_VALUE`. For a private pilot frontend build, set `VITE_API_KEY=<key>` before `npm run build`. Avoid committing `.env` files or uploaded/processed documents.
 
-For durable background processing, use Redis Queue and run a worker:
-
-```bash
-rq worker documents
-```
-
-For database schema management, use Flask-Migrate/Alembic instead of relying on
-startup table creation:
+Use database migrations instead of startup table creation, and run the web app behind a production WSGI server with the worker as a separate process:
 
 ```bash
 AUTO_CREATE_DB=0 flask --app run.py db upgrade
+JOB_BACKEND=rq gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 120 run:app
+AUTO_CREATE_DB=0 python -m legaldocuman.app.worker
 ```
 
+The Docker image defaults to `gunicorn` instead of Flask's development server. `docker compose up --build` also runs the database migration before starting `gunicorn`, and disables startup table creation in the app and worker containers with `AUTO_CREATE_DB=0`.
 
 ### Customer-readiness features
 
-The app now includes the first customer-grade controls beyond the private API key gate:
+The app includes the first customer-grade controls beyond the private API key gate:
 
 - User accounts with tenant scoping and roles: `admin`, `reviewer`, `user`.
 - Bootstrap the first admin with `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` before first startup.
 - Login endpoint: `POST /api/v1/auth/login`; use the returned bearer token for API calls.
+- Browser downloads should mint a short-lived token with `POST /api/v1/documents/<id>/download-token`, then call `GET /api/v1/documents/<id>/download?download_token=...`.
+- Basic in-memory per-client rate limits cover login and upload endpoints for single-process private pilots/tests.
+- Baseline security headers are applied to every Flask response (CSP, nosniff, referrer, frame, and permissions policies).
 - Manual review/correction endpoint and UI on the document detail page.
 - Audit trail events for login, upload, processing, and manual updates.
 - Built-in malware scanning for empty/EICAR files, plus optional `MALWARE_SCANNER=clamav`.
 - Object storage abstraction with `STORAGE_BACKEND=s3` when `boto3` and AWS credentials are configured.
 - Redis/RQ worker process via `python -m legaldocuman.app.worker` and docker-compose `worker` service.
-
-For a shared deployment, use migrations and a queue worker:
-
-```bash
-AUTO_CREATE_DB=0 flask --app run.py db upgrade
-JOB_BACKEND=rq python run.py
-python -m legaldocuman.app.worker
-```
 
 ### Prerequisites
 
@@ -163,6 +160,10 @@ Key variables:
 | `NVIDIA_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | Model identifier |
 | `TESSERACT_PATH` | auto-detect | Override Tesseract binary path |
 | `POPLER_PATH` | auto-detect | Override Poppler binary path (pdf2image) |
+| `DOWNLOAD_TOKEN_TTL_SECONDS` | `300` | Seconds before signed document download tokens expire |
+| `RATE_LIMIT_ENABLED` | `1` | Enable in-memory login/upload rate limiting |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login attempts allowed per client per window |
+| `RATE_LIMIT_UPLOAD_PER_MINUTE` | `30` | Upload attempts allowed per client per window |
 
 `.env` is gitignored — never commit it.
 
@@ -179,6 +180,7 @@ python run.py           # Manual — requires PostgreSQL running
 **Upload a document:**
 ```bash
 curl -X POST http://localhost:5000/api/v1/upload \
+  -H "Authorization: Bearer REPLACE_WITH_LOGIN_TOKEN" \
   -F "file=@/path/to/contract.pdf"
 ```
 
@@ -187,9 +189,18 @@ Response:
 {"id": 1, "job_id": 1, "status": "pending", "job_status": "completed"}
 ```
 
+**Mint a browser download token and download:**
+```bash
+curl -s -X POST http://localhost:5000/api/v1/documents/1/download-token \
+  -H "Authorization: Bearer REPLACE_WITH_LOGIN_TOKEN" > download-token.json
+# Copy the download_token value from download-token.json into the URL below.
+curl -L "http://localhost:5000/api/v1/documents/1/download?download_token=REPLACE_WITH_DOWNLOAD_TOKEN" -o contract.pdf
+```
+
 **Check job status:**
 ```bash
-curl http://localhost:5000/api/v1/jobs/1
+curl http://localhost:5000/api/v1/jobs/1 \
+  -H "Authorization: Bearer PASTE_LOGIN_TOKEN"
 ```
 
 Response:
@@ -294,6 +305,36 @@ pytest tests/ --cov=legaldocuman --cov-report=term-missing
 ```
 
 All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast without system installs. See [Known Limitations](#known-limitations) for integration test status.
+
+### Optional frontend Playwright e2e smoke
+
+A lightweight Playwright scaffold lives under `frontend/e2e`. It is optional and is not wired into CI because browser installation and a running backend/frontend add setup cost.
+
+Install the browser once:
+
+```bash
+cd frontend
+npm run e2e:install
+```
+
+Run against an already running backend and frontend:
+
+```bash
+# terminal 1: backend, for example http://127.0.0.1:5000
+# terminal 2: frontend, optionally point Vite's /api proxy at the backend
+cd frontend
+VITE_API_PROXY_TARGET=http://127.0.0.1:5000 npm run dev -- --host 127.0.0.1
+
+# terminal 3: Playwright
+cd frontend
+E2E_BASE_URL=http://127.0.0.1:5173 \
+E2E_API_URL=http://127.0.0.1:5000 \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=password123 \
+npm run e2e
+```
+
+`E2E_BASE_URL` (or `BASE_URL`) controls the browser target. `E2E_API_URL` (or `API_URL`) controls direct API checks for job/detail/download assertions. The authenticated upload flow is skipped unless admin credentials are supplied; the protected-route redirect smoke still runs. If you want Playwright to start the Vite server for you, set `E2E_START_FRONTEND=1`.
 
 ## Design Decisions
 

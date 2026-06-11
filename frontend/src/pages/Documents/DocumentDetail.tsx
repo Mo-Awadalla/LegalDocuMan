@@ -12,7 +12,7 @@ import {
   DownloadIcon,
 } from "../../icons";
 import { useAuth } from "../../auth/AuthContext";
-import { getDocument, getDocumentAudit, getDocumentDownloadUrl, updateDocument, type AuditEvent, type DocumentDetail as DocDetail } from "../../services/api";
+import { createDocumentDownloadUrl, getDocument, getDocumentAudit, updateDocument, type AuditEvent, type DocumentDetail as DocDetail } from "../../services/api";
 
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
@@ -108,6 +108,16 @@ export default function DocumentDetail() {
     }
   };
 
+  const downloadDocument = async () => {
+    if (!doc) return;
+    setError(null);
+    try {
+      window.location.href = await createDocumentDownloadUrl(doc.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create download link");
+    }
+  };
+
   const setField = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -177,13 +187,14 @@ export default function DocumentDetail() {
                 </div>
                 <div className="flex items-center gap-2">
                   {doc.status === "completed" && (
-                    <a
-                      href={getDocumentDownloadUrl(doc.id)}
+                    <button
+                      type="button"
+                      onClick={downloadDocument}
                       className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
                     >
                       <DownloadIcon className="h-4 w-4" />
                       Download
-                    </a>
+                    </button>
                   )}
                   <StatusIcon status={doc.status} />
                   <Badge

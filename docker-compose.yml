@@ -28,7 +28,7 @@ services:
     ports:
       - "5000:5000"
     environment:
-      DATABASE_URL: postgresql://postgres:***@db:5432/legaldocuman
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/legaldocuman
       REDIS_URL: redis://redis:6379/0
       JOB_BACKEND: rq
       SECRET_KEY: change-me-in-production
@@ -38,6 +38,7 @@ services:
       PROCESSED_FOLDER: /project/processed
       UPLOAD_FOLDER: /project/uploads
       CORS_ORIGINS: http://localhost:5000
+      AUTO_CREATE_DB: "0"
     depends_on:
       db:
         condition: service_healthy
@@ -46,18 +47,19 @@ services:
     volumes:
       - processed:/project/processed
       - uploads:/project/uploads
-    command: sh -c "flask --app run.py db upgrade && python run.py"
+    command: sh -c "flask --app run.py db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-120} run:app"
 
   worker:
     build: .
     environment:
-      DATABASE_URL: postgresql://postgres:***@db:5432/legaldocuman
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/legaldocuman
       REDIS_URL: redis://redis:6379/0
       JOB_BACKEND: rq
       SECRET_KEY: change-me-in-production
       API_KEY: change-me-in-production
       PROCESSED_FOLDER: /project/processed
       UPLOAD_FOLDER: /project/uploads
+      AUTO_CREATE_DB: "0"
     depends_on:
       db:
         condition: service_healthy

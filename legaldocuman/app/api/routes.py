@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 
 from legaldocuman.storage import get_storage_backend
 
-from ..auth import audit, auth_required, current_tenant_id, current_user, issue_token
+from ..auth import audit, auth_required, authenticate_request, current_tenant_id, current_user, issue_download_token, issue_token, load_download_token
 from ..extensions import db
 from ..models import AuditEvent, Document, DocumentJob, DocumentJobStatus, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
 from ..processors.worker import process_document_async
@@ -323,9 +323,18 @@ def update_document(doc_id):
 
 
 @api_bp.route("/documents/<int:doc_id>/download")
-@auth_required()
 def download_document(doc_id):
-    doc = _get_doc_or_404(doc_id)
+    download_token = request.args.get("download_token", "")
+    if download_token:
+        token_data = load_download_token(download_token)
+        if not token_data or token_data.get("document_id") != doc_id:
+            return jsonify({"error": "Invalid or expired download token"}), 401
+        doc = Document.query.filter(Document.id == doc_id, Document.tenant_id == token_data.get("tenant_id")).first()
+    else:
+        auth_error = authenticate_request()
+        if auth_error:
+            return auth_error
+        doc = _get_doc_or_404(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
     storage = get_storage_backend() if doc.stored_path.startswith("s3://") else None
@@ -337,6 +346,22 @@ def download_document(doc_id):
     if not os.path.exists(doc.stored_path):
         return jsonify({"error": "Stored file not found"}), 404
     return send_file(doc.stored_path, as_attachment=True, download_name=doc.generated_filename or doc.original_name)
+
+
+@api_bp.route("/documents/<int:doc_id>/download-token", methods=["POST"])
+@auth_required()
+def mint_download_token(doc_id):
+    doc = _get_doc_or_404(doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+    user = current_user()
+    token = issue_download_token(doc.id, doc.tenant_id, user.id if user else None)
+    audit("document.download_token", document_id=doc.id)
+    db.session.commit()
+    return jsonify({
+        "download_token": token,
+        "expires_in": int(current_app.config.get("DOWNLOAD_TOKEN_TTL_SECONDS", 300)),
+    })
 
 
 @api_bp.route("/documents/<int:doc_id>/audit")
