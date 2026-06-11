@@ -16,8 +16,36 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="legaldocuman-auth")
 
 
+def _download_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="legaldocuman-download")
+
+
 def issue_token(user: User) -> str:
     return _serializer().dumps({"user_id": user.id})
+
+
+def issue_download_token(document_id: int, tenant_id: int | None, user_id: int | None = None) -> str:
+    """Issue a short-lived, signed browser-download token for one document."""
+    return _download_serializer().dumps({
+        "document_id": document_id,
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+    })
+
+
+def load_download_token(token: str) -> dict | None:
+    if not token:
+        return None
+    try:
+        data = _download_serializer().loads(
+            token,
+            max_age=int(current_app.config.get("DOWNLOAD_TOKEN_TTL_SECONDS", 300)),
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(data, dict) or "document_id" not in data:
+        return None
+    return data
 
 
 def current_user() -> User | None:
@@ -98,24 +126,35 @@ def _legacy_open_dev_mode() -> bool:
     return bool(current_app.config.get("ALLOW_OPEN_DEV_MODE")) and not _configured_api_key() and User.query.count() == 0
 
 
-def auth_required(roles: Iterable[UserRole | str] | None = None):
+def authenticate_request(roles: Iterable[UserRole | str] | None = None):
+    """Authenticate the current request.
+
+    Returns None when access is allowed, otherwise a Flask response tuple.
+    """
     allowed = {r.value if isinstance(r, UserRole) else r for r in roles} if roles else None
 
+    user = _load_user_from_bearer(request.headers.get("Authorization", "")) or _load_user_from_token(request.args.get("api_key", ""))
+    if user:
+        g.current_user = user
+        if allowed and user.role.value not in allowed:
+            return jsonify({"error": "Forbidden"}), 403
+        return None
+
+    if _api_key_is_valid() or _legacy_open_dev_mode():
+        g.current_user = None
+        return None
+
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+def auth_required(roles: Iterable[UserRole | str] | None = None):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            user = _load_user_from_bearer(request.headers.get("Authorization", "")) or _load_user_from_token(request.args.get("api_key", ""))
-            if user:
-                g.current_user = user
-                if allowed and user.role.value not in allowed:
-                    return jsonify({"error": "Forbidden"}), 403
-                return view(*args, **kwargs)
-
-            if _api_key_is_valid() or _legacy_open_dev_mode():
-                g.current_user = None
-                return view(*args, **kwargs)
-
-            return jsonify({"error": "Unauthorized"}), 401
+            auth_error = authenticate_request(roles)
+            if auth_error:
+                return auth_error
+            return view(*args, **kwargs)
 
         return wrapped
 
