@@ -6,6 +6,7 @@ Create Date: 2026-06-10 00:00:00
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "0001_create_documents"
@@ -14,16 +15,8 @@ branch_labels = None
 depends_on = None
 
 
-document_status = sa.Enum(
-    "PENDING",
-    "PROCESSING",
-    "COMPLETED",
-    "FAILED",
-    name="documentstatus",
-)
-
-
 def upgrade():
+    op.execute("CREATE TYPE documentstatus AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')")
     op.create_table(
         "documents",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -31,7 +24,7 @@ def upgrade():
         sa.Column("stored_path", sa.String(length=1000), nullable=False),
         sa.Column("file_size", sa.Integer(), nullable=True),
         sa.Column("checksum", sa.String(length=64), nullable=True),
-        sa.Column("status", document_status, nullable=False),
+        sa.Column("status", postgresql.ENUM(name="documentstatus", create_type=False), nullable=False),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("document_type", sa.String(length=50), nullable=True),
         sa.Column("vendor", sa.String(length=200), nullable=True),
@@ -49,4 +42,4 @@ def upgrade():
 
 def downgrade():
     op.drop_table("documents")
-    document_status.drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS documentstatus")

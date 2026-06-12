@@ -41,6 +41,12 @@ RUN mkdir -p /project/models && \
     curl -L -o /project/models/checkpoint_best_total.pth \
     "https://huggingface.co/Mo-Awadalla/legaldocuman-rfdetr/resolve/main/checkpoint_best_total.pth"
 
+# Small LM for document type + vendor extraction.  Starts empty — the
+# fine-tuning script (scripts/finetune_model.py) populates
+# /project/models/small_lm.  Until that runs, the pipeline falls back
+# to the HuggingFace base model (google/flan-t5-small) on first use.
+RUN mkdir -p /project/models/small_lm
+
 RUN mkdir -p /project/processed /project/uploads
 
 EXPOSE 5000

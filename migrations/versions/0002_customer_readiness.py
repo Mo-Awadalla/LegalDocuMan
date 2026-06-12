@@ -6,6 +6,7 @@ Create Date: 2026-06-10 00:00:01
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "0002_customer_readiness"
@@ -14,12 +15,10 @@ branch_labels = None
 depends_on = None
 
 
-user_role = sa.Enum("ADMIN", "REVIEWER", "USER", name="userrole")
-review_status = sa.Enum("NOT_REQUIRED", "NEEDS_REVIEW", "REVIEWED", name="reviewstatus")
-scan_status = sa.Enum("PENDING", "CLEAN", "INFECTED", "ERROR", name="scanstatus")
-
-
 def upgrade():
+    op.execute("CREATE TYPE userrole AS ENUM ('ADMIN', 'REVIEWER', 'USER')")
+    op.execute("CREATE TYPE reviewstatus AS ENUM ('NOT_REQUIRED', 'NEEDS_REVIEW', 'REVIEWED')")
+    op.execute("CREATE TYPE scanstatus AS ENUM ('PENDING', 'CLEAN', 'INFECTED', 'ERROR')")
     op.create_table(
         "tenants",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -36,7 +35,7 @@ def upgrade():
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
-        sa.Column("role", user_role, nullable=False),
+        sa.Column("role", postgresql.ENUM(name="userrole", create_type=False), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
@@ -50,10 +49,10 @@ def upgrade():
         batch.add_column(sa.Column("reviewed_by_id", sa.Integer(), nullable=True))
         batch.add_column(sa.Column("storage_backend", sa.String(length=50), nullable=False, server_default="local"))
         batch.add_column(sa.Column("storage_key", sa.String(length=1000), nullable=True))
-        batch.add_column(sa.Column("scan_status", scan_status, nullable=False, server_default="CLEAN"))
+        batch.add_column(sa.Column("scan_status", postgresql.ENUM(name="scanstatus", create_type=False), nullable=False, server_default="CLEAN"))
         batch.add_column(sa.Column("scan_message", sa.Text(), nullable=True))
         batch.add_column(sa.Column("scanned_at", sa.DateTime(), nullable=True))
-        batch.add_column(sa.Column("review_status", review_status, nullable=False, server_default="NOT_REQUIRED"))
+        batch.add_column(sa.Column("review_status", postgresql.ENUM(name="reviewstatus", create_type=False), nullable=False, server_default="NOT_REQUIRED"))
         batch.add_column(sa.Column("review_notes", sa.Text(), nullable=True))
         batch.add_column(sa.Column("reviewed_at", sa.DateTime(), nullable=True))
         batch.create_foreign_key("fk_documents_tenant_id", "tenants", ["tenant_id"], ["id"])
@@ -102,6 +101,6 @@ def downgrade():
     op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")
     op.drop_table("tenants")
-    scan_status.drop(op.get_bind(), checkfirst=True)
-    review_status.drop(op.get_bind(), checkfirst=True)
-    user_role.drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS scanstatus")
+    op.execute("DROP TYPE IF EXISTS reviewstatus")
+    op.execute("DROP TYPE IF EXISTS userrole")

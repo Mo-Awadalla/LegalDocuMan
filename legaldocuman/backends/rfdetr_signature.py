@@ -96,3 +96,18 @@ class RFDETRSignatureBackend(SignatureDetectorBackend):
             except Exception as exc:
                 logging.warning(f"RF-DETR inference failed on page {page_num}: {exc}")
         return results
+
+    def detect_with_renderer(self, file_path: str, page_renderer, last_n: int) -> List[Dict[str, Any]]:
+        """Convenience wrapper that uses a shared PageRenderer.
+
+        Renders the last `last_n` pages through `page_renderer` (so the
+        same rendered image is reused if the SmartReader already rendered
+        it for OCR) and runs the detector.
+        """
+        if not self.is_available() or page_renderer is None:
+            return []
+        first_page, page_offset = page_renderer.last_n_offset(file_path, last_n)
+        if first_page == 0:
+            return []
+        images = page_renderer.render_range(file_path, first_page, first_page + last_n - 1)
+        return self.detect(images, page_offset=page_offset)
