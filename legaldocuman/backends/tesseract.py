@@ -3,8 +3,8 @@ import logging
 import os
 from typing import Optional
 
-from .base import OCRBackend
 from ..config import Config
+from .base import OCRBackend
 
 
 class TesseractOCRBackend(OCRBackend):
@@ -62,6 +62,10 @@ class TesseractOCRBackend(OCRBackend):
         except Exception as e:
             logging.debug(f"Tesseract OCR error on image: {e}")
             return ""
+
+    def ocr_page(self, image) -> str:
+        """Alias for image_to_text — used by the SmartReader's per-page loop."""
+        return self.image_to_text(image)
 
     def pdf_to_text(self, file_path: str, first_page: int = 1, last_page: Optional[int] = None) -> str:
         if not self._available:

@@ -36,3 +36,9 @@ pytest>=7.0.0,<9.0.0
 # Signature detection — RF-DETR visual model
 rfdetr>=1.7.0
 supervision>=0.23.0
+
+# Small LM — FLAN-T5-small for document type + vendor extraction
+# Upper bound matches rfdetr's required range (transformers >=5.1.0)
+transformers>=4.40.0,<6.0.0
+sentencepiece>=0.2.0
+protobuf>=4.0.0

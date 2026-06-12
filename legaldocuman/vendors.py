@@ -1,8 +1,14 @@
-"""Vendor name extraction and fuzzy matching."""
+"""Vendor name extraction and fuzzy matching.
+
+The SmallLMModel is now the primary vendor extractor — see ml_model.py
+and intake.py.  This module keeps the legacy folder/filename cascade and
+fuzzy master-list matching as a fallback when the LM is disabled or
+returns an empty result.
+"""
 import logging
 import re
 from difflib import SequenceMatcher
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from .utils import normalize_vendor_name
 
@@ -13,7 +19,7 @@ _UUID_RE = re.compile(
 
 
 class VendorExtractor:
-    """Extract and normalize vendor names."""
+    """Folder- and filename-based vendor heuristics + master-list fuzzy match."""
 
     def __init__(self, vendor_master_list=None):
         self.vendor_master_list = vendor_master_list or []
@@ -50,38 +56,6 @@ class VendorExtractor:
             return vendor_name
 
         return folder_name
-
-    def extract_vendor_from_text(self, text: str) -> Optional[str]:
-        """Extract the counterparty name from contract body text.
-
-        Searches the opening preamble (first 3 000 chars) for the most common
-        patterns used to introduce parties in professional-services and vendor
-        agreements.  Returns the first plausible match, or None.
-        """
-        if not text:
-            return None
-
-        preamble = text[:3000]
-
-        patterns = [
-            # "and ACME CORP, hereinafter called …"
-            r'and\s+((?:[A-Z][A-Za-z0-9&\s,\.\']+?){1,8}?)[,\s]+hereinafter\s+(?:called|referred)',
-            # "between … and ACME CORP ("
-            r'between[^.]{0,300}?and\s+((?:[A-Z][A-Za-z0-9&\s,\.\']+?){1,6}?)\s*\(',
-            # "ACME CORP, a California corporation"
-            r'((?:[A-Z][A-Z0-9&\s,\.\']{4,60}?)),\s+a\s+\w+\s+(?:corporation|company|llc|partnership|limited)',
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, preamble)
-            if match:
-                candidate = match.group(1).strip().rstrip(',').strip()
-                words = candidate.split()
-                if len(words) >= 1 and len(candidate) > 3:
-                    logging.info(f"Extracted vendor '{candidate}' from document text")
-                    return candidate
-
-        return None
 
     def extract_vendor_from_filename(self, filename: str) -> Optional[str]:
         """Best-effort vendor signal from upload filenames such as Acme_MSA_2024.pdf."""
@@ -123,3 +97,14 @@ class VendorExtractor:
                 best_score = score
 
         return best_match, best_score
+
+    # ------------------------------------------------------------------
+    # Legacy text-pattern extractor — kept as a public alias so callers
+    # that imported it (e.g. tests) still work.  The new pipeline uses
+    # the SmartReader + SmallLMModel instead.
+    # ------------------------------------------------------------------
+
+    def extract_vendor_from_text(self, text: str) -> Optional[str]:
+        """Deprecated.  Use SmartReader + SmallLMModel instead."""
+        logging.debug("extract_vendor_from_text is deprecated — use SmartReader + SmallLMModel")
+        return None

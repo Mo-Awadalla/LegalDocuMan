@@ -74,6 +74,50 @@ class Config:
     )
 
     # ------------------------------------------------------------------
+    # Small LM — document type + vendor extraction
+    # ------------------------------------------------------------------
+    # HuggingFace model id or local path. Defaults to the fine-tuned
+    # LegalDocuMan checkpoint at models/small_lm/. Override via
+    # SMALL_LM_MODEL_NAME to point at a different checkpoint.
+    SMALL_LM_MODEL_NAME: str = field(
+        default_factory=lambda: os.environ.get(
+            "SMALL_LM_MODEL_NAME",
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "models", "small_lm",
+            ),
+        )
+    )
+    # If set, bypass the local checkpoint and always load from HuggingFace.
+    # Useful as a starting point before fine-tuning has been run.
+    SMALL_LM_BASE_MODEL: str = field(
+        default_factory=lambda: os.environ.get("SMALL_LM_BASE_MODEL", "google/flan-t5-small")
+    )
+    # Whether to use the LM at runtime. When false the system falls back to
+    # the legacy regex-based classifiers and vendor extractors.
+    SMALL_LM_ENABLED: bool = field(
+        default_factory=lambda: os.environ.get("SMALL_LM_ENABLED", "1") == "1"
+    )
+    # Max number of leading pages the SmartReader will OCR progressively.
+    SMALL_LM_MAX_PAGES: int = field(
+        default_factory=lambda: int(os.environ.get("SMALL_LM_MAX_PAGES", "7"))
+    )
+    # Pages read in the first widening pass before checking the signal.
+    SMALL_LM_INITIAL_PAGES: int = field(
+        default_factory=lambda: int(os.environ.get("SMALL_LM_INITIAL_PAGES", "2"))
+    )
+    # Minimum cumulative text length (chars) before the SmartReader stops
+    # widening the page range.
+    SMALL_LM_MIN_TEXT_LENGTH: int = field(
+        default_factory=lambda: int(os.environ.get("SMALL_LM_MIN_TEXT_LENGTH", "200"))
+    )
+    # Max characters of text fed into the LM at inference time. Truncation
+    # is applied on top of the FLAN-T5 512-token window.
+    SMALL_LM_MAX_INPUT_CHARS: int = field(
+        default_factory=lambda: int(os.environ.get("SMALL_LM_MAX_INPUT_CHARS", "2000"))
+    )
+
+    # ------------------------------------------------------------------
     # File naming
     # ------------------------------------------------------------------
     UNIQUE_ID_PADDING: int = 3

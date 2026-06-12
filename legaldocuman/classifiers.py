@@ -1,14 +1,25 @@
-"""Document type and status classifiers."""
+"""Document type and status classifiers.
+
+Document type classification is now performed by the SmallLMModel
+(see ml_model.py and intake.py).  The DocumentTypeClassifier below is
+kept as a legacy regex fallback used when the LM is disabled or returns
+an empty result.
+
+Document status classification (final / supporting) is unchanged —
+it still combines RF-DETR visual signature detection on the last pages
+with a regex fallback.
+"""
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .config import Config
+from .extractors import PageRenderer
 
 
 class DocumentTypeClassifier:
-    """Classify document types (MSA, SOW, NDA, etc.)."""
+    """Legacy regex-based doc type classifier.  Kept as a fallback."""
 
     def __init__(self):
         self.type_patterns = {
@@ -226,24 +237,16 @@ class DocumentStatusClassifier:
 
         Returns (images, page_offset) where page_offset is the 0-indexed
         page number of images[0] within the document.
+
+        Uses the shared PageRenderer so the SmartReader and signature
+        detector share work for short documents.
         """
         try:
-            import pdfplumber
-            from pdf2image import convert_from_path
-
-            with pdfplumber.open(file_path) as pdf:
-                total_pages = len(pdf.pages)
-
-            first_page = max(1, total_pages - n_pages + 1)  # pdf2image is 1-indexed
-            page_offset = first_page - 1                     # callers use 0-indexed
-
-            images = convert_from_path(
-                file_path,
-                dpi=dpi,
-                first_page=first_page,
-                last_page=total_pages,
-                poppler_path=Config.get().POPLER_PATH,
-            )
+            renderer = PageRenderer(dpi=dpi)
+            first_page, page_offset = renderer.last_n_offset(file_path, n_pages)
+            if first_page == 0:
+                return [], 0
+            images = renderer.render_range(file_path, first_page, first_page + n_pages - 1)
             return images, page_offset
         except Exception as exc:
             logging.warning(f"PDF page rendering failed for {file_path}: {exc}")

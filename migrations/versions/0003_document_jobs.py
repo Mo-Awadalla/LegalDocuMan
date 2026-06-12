@@ -6,6 +6,7 @@ Create Date: 2026-06-10 00:00:02
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "0003_document_jobs"
@@ -14,23 +15,14 @@ branch_labels = None
 depends_on = None
 
 
-document_job_status = sa.Enum(
-    "PENDING",
-    "QUEUED",
-    "PROCESSING",
-    "COMPLETED",
-    "FAILED",
-    name="documentjobstatus",
-)
-
-
 def upgrade():
+    op.execute("CREATE TYPE documentjobstatus AS ENUM ('PENDING', 'QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED')")
     op.create_table(
         "document_jobs",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("document_id", sa.Integer(), sa.ForeignKey("documents.id"), nullable=False),
         sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id"), nullable=True),
-        sa.Column("status", document_job_status, nullable=False),
+        sa.Column("status", postgresql.ENUM(name="documentjobstatus", create_type=False), nullable=False),
         sa.Column("backend", sa.String(length=50), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_attempts", sa.Integer(), nullable=False, server_default="3"),
@@ -50,4 +42,4 @@ def downgrade():
     op.drop_index("ix_document_jobs_tenant_id", table_name="document_jobs")
     op.drop_index("ix_document_jobs_document_id", table_name="document_jobs")
     op.drop_table("document_jobs")
-    document_job_status.drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS documentjobstatus")
