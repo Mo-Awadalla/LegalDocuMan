@@ -25,7 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setApiKeyAuthenticated(Boolean(response.auth_mode && !response.user));
     } catch {
       clearStoredToken();
-      setUser(null);
+      // Login disabled — use a dummy admin user so the UI renders
+      setUser({ id: 0, email: "dev@local", name: "Developer", role: "ADMIN" as any, tenant_id: 1 });
       setApiKeyAuthenticated(false);
     } finally {
       setLoading(false);
