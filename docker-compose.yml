@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-legaldocuman}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: legaldocuman
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-legaldocuman}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 3s
       timeout: 3s
       retries: 5
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "6379:6379"
     volumes:
       - redisdata:/data
     command: redis-server --appendonly yes
@@ -26,35 +26,19 @@ services:
   app:
     build: .
     ports:
-      - "${APP_PORT:-5000}:5000"
+      - "5000:5000"
     environment:
-      APP_ENV: ${APP_ENV:-local}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:***@db:5432/legaldocuman}
-      REDIS_URL: ${REDIS_URL:-redis://redis:***@example.com}
-      JOB_BACKEND: ${JOB_BACKEND:-rq}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      API_KEY: ${API_KEY:-change-me-in-production}
-      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-change-me-in-production}
-      BOOTSTRAP_TENANT_NAME: ${BOOTSTRAP_TENANT_NAME:-Default Tenant}
-      AUTH_TOKEN_TTL_SECONDS: ${AUTH_TOKEN_TTL_SECONDS:-86400}
-      DOWNLOAD_TOKEN_TTL_SECONDS: ${DOWNLOAD_TOKEN_TTL_SECONDS:-300}
-      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-1}
-      RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
-      RATE_LIMIT_UPLOAD_PER_MINUTE: ${RATE_LIMIT_UPLOAD_PER_MINUTE:-30}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5000,http://localhost:5173}
-      OCR_BACKEND: ${OCR_BACKEND:-tesseract}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
-      NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      NVIDIA_OCR_MODEL: ${NVIDIA_OCR_MODEL:-nvidia/nemotron-ocr-v2}
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
-      S3_BUCKET: ${S3_BUCKET:-}
-      S3_PREFIX: ${S3_PREFIX:-legaldocuman/uploads}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      PROCESSED_FOLDER: ${PROCESSED_FOLDER:-/project/processed}
-      UPLOAD_FOLDER: ${UPLOAD_FOLDER:-/project/uploads}
-      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
-      AUTO_CREATE_DB: ${AUTO_CREATE_DB:-0}
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/legaldocuman
+      REDIS_URL: redis://redis:6379/0
+      JOB_BACKEND: rq
+      SECRET_KEY: change-me-in-production
+      API_KEY: change-me-in-production
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: change-me-in-production
+      PROCESSED_FOLDER: /project/processed
+      UPLOAD_FOLDER: /project/uploads
+      CORS_ORIGINS: http://localhost:5000
+      AUTO_CREATE_DB: "0"
     depends_on:
       db:
         condition: service_healthy
@@ -63,28 +47,19 @@ services:
     volumes:
       - processed:/project/processed
       - uploads:/project/uploads
-    command: sh -c "flask --app run.py db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers $${GUNICORN_WORKERS:-2} --threads $${GUNICORN_THREADS:-4} --timeout $${GUNICORN_TIMEOUT:-120} run:app"
+    command: sh -c "flask --app run.py db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-120} run:app"
 
   worker:
     build: .
     environment:
-      APP_ENV: ${APP_ENV:-local}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/legaldocuman}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JOB_BACKEND: ${JOB_BACKEND:-rq}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      API_KEY: ${API_KEY:-change-me-in-production}
-      OCR_BACKEND: ${OCR_BACKEND:-tesseract}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
-      NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      NVIDIA_OCR_MODEL: ${NVIDIA_OCR_MODEL:-nvidia/nemotron-ocr-v2}
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
-      S3_BUCKET: ${S3_BUCKET:-}
-      S3_PREFIX: ${S3_PREFIX:-legaldocuman/uploads}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      PROCESSED_FOLDER: ${PROCESSED_FOLDER:-/project/processed}
-      UPLOAD_FOLDER: ${UPLOAD_FOLDER:-/project/uploads}
-      AUTO_CREATE_DB: ${AUTO_CREATE_DB:-0}
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/legaldocuman
+      REDIS_URL: redis://redis:6379/0
+      JOB_BACKEND: rq
+      SECRET_KEY: change-me-in-production
+      API_KEY: change-me-in-production
+      PROCESSED_FOLDER: /project/processed
+      UPLOAD_FOLDER: /project/uploads
+      AUTO_CREATE_DB: "0"
     depends_on:
       db:
         condition: service_healthy

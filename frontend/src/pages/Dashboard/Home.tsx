@@ -12,6 +12,7 @@ import {
 import {
   FileIcon,
   CheckCircleIcon,
+  TimeIcon,
   AlertIcon,
   BoxIcon,
   EyeIcon,
@@ -53,7 +54,6 @@ export default function Home() {
   const [stats, setStats] = useState<DocumentStats | null>(null);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getDocumentStats(), listDocuments({ per_page: 5 })])
@@ -61,7 +61,7 @@ export default function Home() {
         setStats(s);
         setRecentDocs(docs.documents);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load dashboard"))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -83,9 +83,9 @@ export default function Home() {
             color="bg-success-50 dark:bg-success-500/15"
           />
           <StatCard
-            icon={<EyeIcon className="h-6 w-6 text-warning-500" />}
-            label="Needs Review"
-            value={loading ? "..." : stats?.by_review_status?.needs_review ?? 0}
+            icon={<TimeIcon className="h-6 w-6 text-warning-500" />}
+            label="Processing"
+            value={loading ? "..." : (stats?.by_status?.processing ?? 0) + (stats?.by_status?.pending ?? 0)}
             color="bg-warning-50 dark:bg-warning-500/15"
           />
           <StatCard
@@ -95,14 +95,6 @@ export default function Home() {
             color="bg-error-50 dark:bg-error-500/15"
           />
         </div>
-
-        {error && <div className="rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600 dark:border-error-500/20 dark:bg-error-500/10">{error}</div>}
-
-        {!loading && !error && (stats?.total ?? 0) === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.03]">
-            No documents yet. <Link to="/upload" className="text-brand-500 hover:text-brand-600">Upload your first document</Link> to start processing.
-          </div>
-        )}
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2 rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
