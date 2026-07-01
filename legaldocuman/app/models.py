@@ -74,6 +74,10 @@ class User(db.Model):
 
 class Document(db.Model):
     __tablename__ = "documents"
+    __table_args__ = (
+        db.Index("ix_documents_tenant_status_created", "tenant_id", "status", "created_at"),
+        db.Index("ix_documents_tenant_review_created", "tenant_id", "review_status", "created_at"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True, index=True)
@@ -125,6 +129,7 @@ class Document(db.Model):
 
 class AuditEvent(db.Model):
     __tablename__ = "audit_events"
+    __table_args__ = (db.Index("ix_audit_events_tenant_created", "tenant_id", "created_at"),)
 
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True, index=True)
@@ -144,6 +149,7 @@ class AuditEvent(db.Model):
 
 class DocumentJob(db.Model):
     __tablename__ = "document_jobs"
+    __table_args__ = (db.Index("ix_document_jobs_tenant_status_created", "tenant_id", "status", "created_at"),)
 
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)

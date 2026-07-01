@@ -15,19 +15,15 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
-  const [apiKeyAuthenticated, setApiKeyAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
     try {
       const response = await getCurrentUser();
       setUser(response.user);
-      setApiKeyAuthenticated(Boolean(response.auth_mode && !response.user));
     } catch {
       clearStoredToken();
-      // Login disabled — use a dummy admin user so the UI renders
-      setUser({ id: 0, email: "dev@local", name: "Developer", role: "ADMIN" as any, tenant_id: 1 });
-      setApiKeyAuthenticated(false);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -40,13 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const response = await apiLogin(email, password);
     setUser(response.user);
-    setApiKeyAuthenticated(false);
   }, []);
 
   const logout = useCallback(() => {
     clearStoredToken();
     setUser(null);
-    setApiKeyAuthenticated(false);
   }, []);
 
   const hasRole = useCallback((roles: string[]) => {
@@ -56,12 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     user,
     loading,
-    isAuthenticated: Boolean(user) || apiKeyAuthenticated,
+    isAuthenticated: Boolean(user),
     login,
     logout,
     refreshUser,
     hasRole,
-  }), [user, apiKeyAuthenticated, loading, login, logout, refreshUser, hasRole]);
+  }), [user, loading, login, logout, refreshUser, hasRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

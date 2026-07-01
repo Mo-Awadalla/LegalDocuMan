@@ -57,6 +57,10 @@ def current_tenant_id() -> int | None:
     return user.tenant_id if user else None
 
 
+def api_key_authenticated() -> bool:
+    return bool(getattr(g, "api_key_authenticated", False))
+
+
 def _configured_api_key() -> str | None:
     key = current_app.config.get("API_KEY")
     if isinstance(key, str):
@@ -131,8 +135,23 @@ def authenticate_request(roles: Iterable[UserRole | str] | None = None):
 
     Returns None when access is allowed, otherwise a Flask response tuple.
     """
-    # Login page disabled — allow all requests
-    return None
+    allowed = {r.value if isinstance(r, UserRole) else r for r in roles} if roles else None
+
+    user = _load_user_from_bearer(request.headers.get("Authorization", "")) or _load_user_from_token(request.args.get("api_key", ""))
+    if user:
+        g.current_user = user
+        if allowed and user.role.value not in allowed:
+            return jsonify({"error": "Forbidden"}), 403
+        return None
+
+    if _api_key_is_valid() or _legacy_open_dev_mode():
+        if allowed:
+            return jsonify({"error": "Forbidden"}), 403
+        g.current_user = None
+        g.api_key_authenticated = True
+        return None
+
+    return jsonify({"error": "Unauthorized"}), 401
 
 
 def auth_required(roles: Iterable[UserRole | str] | None = None):

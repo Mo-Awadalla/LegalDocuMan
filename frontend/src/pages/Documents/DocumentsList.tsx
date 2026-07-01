@@ -10,7 +10,7 @@ import {
   TableCell,
 } from "../../components/ui/table";
 import { AngleLeftIcon, AngleRightIcon, EyeIcon } from "../../icons";
-import { listDocuments, type Document } from "../../services/api";
+import { downloadDocumentsExport, listDocuments, type Document } from "../../services/api";
 
 function statusBadge(status: string) {
   switch (status) {
@@ -40,12 +40,14 @@ export default function DocumentsList() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await listDocuments({
         page,
@@ -57,8 +59,9 @@ export default function DocumentsList() {
       setDocuments(res.documents);
       setTotal(res.total);
       setPages(res.pages);
-    } catch {
+    } catch (err) {
       setDocuments([]);
+      setError(err instanceof Error ? err.message : "Unable to load documents");
     }
     setLoading(false);
   }, [page, search, statusFilter, typeFilter]);
@@ -79,14 +82,21 @@ export default function DocumentsList() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-800 dark:text-white/90">
-              Documents
-            </h1>
+            <h1 className="text-2xl font-semibold text-gray-800 dark:text-white/90">Documents</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {total} document{total !== 1 ? "s" : ""} total
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => downloadDocumentsExport({ search: search || undefined, status: statusFilter || undefined, type: typeFilter || undefined }).catch((err) => setError(err instanceof Error ? err.message : "Unable to export documents"))}
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            Export CSV
+          </button>
         </div>
+
+        {error && <div className="rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600 dark:border-error-500/20 dark:bg-error-500/10">{error}</div>}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
@@ -211,6 +221,9 @@ export default function DocumentsList() {
                           <EyeIcon className="h-4 w-4" />
                           View
                         </Link>
+                        {doc.review_status === "needs_review" && (
+                          <span className="ml-3 text-xs text-warning-600">Needs review</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

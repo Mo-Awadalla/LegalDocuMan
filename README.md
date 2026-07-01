@@ -92,7 +92,9 @@ REDIS_URL=redis://localhost:6379/0
 AUTO_CREATE_DB=0
 ```
 
-With `API_KEY` set, API clients must send `X-API-Key: API_KEY_VALUE` or `Authorization: Bearer API_KEY_VALUE`. For a private pilot frontend build, set `VITE_API_KEY=<key>` before `npm run build`. Avoid committing `.env` files or uploaded/processed documents.
+Browser users should sign in through `POST /api/v1/auth/login`; the React app stores the returned bearer token and sends it on API requests. Do not embed `API_KEY` values in frontend builds. `API_KEY` is only for private server-to-server or scripted API clients that can keep the key secret and send `X-API-Key: API_KEY_VALUE` or `Authorization: Bearer API_KEY_VALUE`.
+
+Avoid committing `.env` files or uploaded/processed documents.
 
 Use database migrations instead of startup table creation, and run the web app behind a production WSGI server with the worker as a separate process:
 
