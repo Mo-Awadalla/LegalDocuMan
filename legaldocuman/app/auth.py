@@ -57,6 +57,10 @@ def current_tenant_id() -> int | None:
     return user.tenant_id if user else None
 
 
+def api_key_authenticated() -> bool:
+    return bool(getattr(g, "api_key_authenticated", False))
+
+
 def _configured_api_key() -> str | None:
     key = current_app.config.get("API_KEY")
     if isinstance(key, str):
@@ -141,7 +145,10 @@ def authenticate_request(roles: Iterable[UserRole | str] | None = None):
         return None
 
     if _api_key_is_valid() or _legacy_open_dev_mode():
+        if allowed:
+            return jsonify({"error": "Forbidden"}), 403
         g.current_user = None
+        g.api_key_authenticated = True
         return None
 
     return jsonify({"error": "Unauthorized"}), 401

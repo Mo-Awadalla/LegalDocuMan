@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Link } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import { FileIcon, CheckCircleIcon, AlertIcon, TimeIcon } from "../../icons";
-import { uploadDocument, getJobStatus, type Document } from "../../services/api";
+import { uploadDocument, getJobStatus, getPublicConfig, type Document, type PublicConfig } from "../../services/api";
 
 interface UploadResult {
   id: number;
@@ -16,6 +16,21 @@ interface UploadResult {
 export default function Upload() {
   const [results, setResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
+
+  useEffect(() => {
+    getPublicConfig().then(setConfig).catch(() => setConfig(null));
+  }, []);
+
+  const allowedExtensions = useMemo(
+    () => (config?.allowed_extensions?.length ? config.allowed_extensions : [".pdf", ".docx", ".doc", ".txt"]),
+    [config?.allowed_extensions]
+  );
+  const accept = useMemo(() => allowedExtensions.reduce<Record<string, string[]>>((acc, ext) => {
+    const normalized = ext.startsWith(".") ? ext : `.${ext}`;
+    acc["application/octet-stream"] = [...(acc["application/octet-stream"] || []), normalized];
+    return acc;
+  }, {}), [allowedExtensions]);
 
   const pollStatus = useCallback(async (jobId: number) => {
     const poll = async () => {
@@ -51,6 +66,9 @@ export default function Upload() {
 
       for (let i = 0; i < acceptedFiles.length; i++) {
         try {
+          if (config?.max_upload_mb && acceptedFiles[i].size > config.max_upload_mb * 1024 * 1024) {
+            throw new Error(`File exceeds ${config.max_upload_mb} MB limit`);
+          }
           const res = await uploadDocument(acceptedFiles[i]);
           setResults((prev) => {
             const updated = [...prev];
@@ -74,17 +92,13 @@ export default function Upload() {
       }
       setUploading(false);
     },
-    [pollStatus]
+    [pollStatus, config?.max_upload_mb]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "application/pdf": [".pdf"],
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-      "application/msword": [".doc"],
-      "text/plain": [".txt"],
-    },
+    accept,
+    multiple: true,
   });
 
   return (
@@ -120,8 +134,11 @@ export default function Upload() {
                 Drag & drop files here
               </p>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                or click to browse (PDF, DOCX, DOC, TXT)
+                or click to browse ({allowedExtensions.join(", ")})
               </p>
+              {config?.max_upload_mb && (
+                <p className="mt-1 text-xs text-gray-400">Maximum file size: {config.max_upload_mb} MB. Multiple files upload sequentially.</p>
+              )}
             </>
           )}
         </div>
