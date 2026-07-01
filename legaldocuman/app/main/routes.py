@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, jsonify, render_template, send_from_directory, send_file
+from flask import Blueprint, current_app, jsonify, render_template, send_from_directory, send_file
 from sqlalchemy import text
 
 from ..extensions import db
@@ -48,4 +48,6 @@ def readyz():
         db.session.execute(text("select 1"))
     except Exception as exc:
         return jsonify({"status": "error", "database": str(exc)}), 503
-    return jsonify({"status": "ok", "database": "ok"})
+    if current_app.config.get("JOB_BACKEND") == "rq" and not current_app.config.get("REDIS_URL"):
+        return jsonify({"status": "error", "database": "ok", "redis": "REDIS_URL missing"}), 503
+    return jsonify({"status": "ok", "database": "ok", "job_backend": current_app.config.get("JOB_BACKEND")})

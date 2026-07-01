@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 
 import {
@@ -7,6 +7,9 @@ import {
   HorizontaLDots,
   DocsIcon,
   PlusIcon,
+  TaskIcon,
+  UserIcon,
+  GroupIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../auth/AuthContext";
@@ -35,12 +38,24 @@ const navItems: NavItem[] = [
     name: "Documents",
     path: "/documents",
   },
+  {
+    icon: <TaskIcon />,
+    name: "Review Queue",
+    path: "/documents/review-queue",
+  },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { logout, user } = useAuth();
   const location = useLocation();
+  const visibleNavItems = useMemo<NavItem[]>(() => user?.role === "admin"
+    ? [
+        ...navItems,
+        { icon: <UserIcon />, name: "Tenant", path: "/admin/tenant" },
+        { icon: <GroupIcon />, name: "Users", path: "/admin/users" },
+      ]
+    : navItems, [user?.role]);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main" | "others";
@@ -59,7 +74,7 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     let submenuMatched = false;
     ["main", "others"].forEach((menuType) => {
-      const items = menuType === "main" ? navItems : [];
+      const items = menuType === "main" ? visibleNavItems : [];
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
@@ -78,7 +93,7 @@ const AppSidebar: React.FC = () => {
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [location, isActive]);
+  }, [location, isActive, visibleNavItems]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -269,7 +284,7 @@ const AppSidebar: React.FC = () => {
                   <HorizontaLDots className="size-6" />
                 )}
               </h2>
-              {renderMenuItems(navItems, "main")}
+              {renderMenuItems(visibleNavItems, "main")}
             </div>
           </div>
         </nav>

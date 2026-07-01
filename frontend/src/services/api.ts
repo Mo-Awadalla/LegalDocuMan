@@ -1,5 +1,4 @@
 const BASE_URL = "/api/v1";
-const API_KEY = import.meta.env.VITE_API_KEY || "";
 
 export class ApiError extends Error {
   status: number;
@@ -17,8 +16,7 @@ export function getAuthToken(): string {
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
-  if (token) return { Authorization: `Bearer ${token}` };
-  return API_KEY ? { "X-API-Key": API_KEY } : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export interface CurrentUser {
@@ -117,6 +115,44 @@ export interface DocumentJob {
   document: Document | null;
 }
 
+export interface PublicConfig {
+  max_upload_mb?: number;
+  allowed_extensions?: string[];
+  app_name?: string;
+  [key: string]: unknown;
+}
+
+export interface Tenant {
+  id: number;
+  name: string;
+  slug?: string;
+  plan?: string;
+  status?: string;
+  max_upload_mb?: number;
+  allowed_extensions?: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface UserAccount {
+  id: number;
+  email: string;
+  name: string;
+  role: "admin" | "reviewer" | "user";
+  tenant_id?: number;
+  is_active?: boolean;
+  created_at?: string | null;
+}
+
+export interface UserPayload {
+  email: string;
+  name: string;
+  role: "admin" | "reviewer" | "user";
+  password?: string;
+  is_active?: boolean;
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -212,4 +248,84 @@ export async function createDocumentDownloadUrl(id: number): Promise<string> {
   });
   const data = await handleResponse<{ download_token: string; expires_in: number }>(response);
   return `${BASE_URL}/documents/${id}/download?download_token=${encodeURIComponent(data.download_token)}`;
+}
+
+function documentExportQuery(params?: { status?: string; search?: string; type?: string }): string {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.search) searchParams.set("search", params.search);
+  if (params?.type) searchParams.set("type", params.type);
+  return searchParams.toString();
+}
+
+export function getDocumentsExportUrl(params?: { status?: string; search?: string; type?: string }): string {
+  const query = documentExportQuery(params);
+  return `${BASE_URL}/documents/export.csv${query ? `?${query}` : ""}`;
+}
+
+export async function downloadDocumentsExport(params?: { status?: string; search?: string; type?: string }): Promise<void> {
+  const response = await fetch(getDocumentsExportUrl(params), { headers: authHeaders() });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new ApiError(error.error || `HTTP ${response.status}`, response.status);
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "legaldocuman-documents.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function getPublicConfig(): Promise<PublicConfig> {
+  const response = await fetch(`${BASE_URL}/config/public`);
+  return handleResponse<PublicConfig>(response);
+}
+
+export async function getTenant(): Promise<Tenant> {
+  const response = await fetch(`${BASE_URL}/tenant`, { headers: authHeaders() });
+  return handleResponse<Tenant>(response);
+}
+
+export async function updateTenant(payload: Partial<Tenant>): Promise<Tenant> {
+  const response = await fetch(`${BASE_URL}/tenant`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<Tenant>(response);
+}
+
+export async function listUsers(): Promise<{ users: UserAccount[] }> {
+  const response = await fetch(`${BASE_URL}/users`, { headers: authHeaders() });
+  return handleResponse<{ users: UserAccount[] }>(response);
+}
+
+export async function createUser(payload: UserPayload): Promise<UserAccount> {
+  const response = await fetch(`${BASE_URL}/users`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<UserAccount>(response);
+}
+
+export async function updateUser(id: number, payload: Partial<UserPayload>): Promise<UserAccount> {
+  const response = await fetch(`${BASE_URL}/users/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<UserAccount>(response);
+}
+
+export async function getReviewQueue(params?: { page?: number; per_page?: number }): Promise<DocumentListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set("page", String(params.page));
+  if (params?.per_page) searchParams.set("per_page", String(params.per_page));
+  const response = await fetch(`${BASE_URL}/documents/review-queue?${searchParams}`, { headers: authHeaders() });
+  return handleResponse<DocumentListResponse>(response);
 }
