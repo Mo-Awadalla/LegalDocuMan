@@ -17,8 +17,10 @@ import {
   EyeIcon,
 } from "../../icons";
 import {
+  getDocumentDeadlines,
   getDocumentStats,
   listDocuments,
+  type DocumentDeadline,
   type DocumentStats,
   type Document,
 } from "../../services/api";
@@ -52,14 +54,16 @@ function StatCard({
 export default function Home() {
   const [stats, setStats] = useState<DocumentStats | null>(null);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
+  const [deadlines, setDeadlines] = useState<DocumentDeadline[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getDocumentStats(), listDocuments({ per_page: 5 })])
-      .then(([s, docs]) => {
+    Promise.all([getDocumentStats(), listDocuments({ per_page: 5 }), getDocumentDeadlines(90)])
+      .then(([s, docs, deadlineData]) => {
         setStats(s);
         setRecentDocs(docs.documents);
+        setDeadlines(deadlineData.deadlines);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load dashboard"))
       .finally(() => setLoading(false));
@@ -209,6 +213,28 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col gap-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+              <h3 className="mb-1 text-sm font-medium text-gray-800 dark:text-white/90">Contract Deadlines</h3>
+              <p className="mb-4 text-xs text-gray-500">Overdue and upcoming in the next 90 days</p>
+              {deadlines.length ? (
+                <div className="flex max-h-72 flex-col gap-3 overflow-auto">
+                  {deadlines.slice(0, 12).map((deadline) => (
+                    <Link key={`${deadline.document.id}-${deadline.kind}`} to={`/documents/${deadline.document.id}`} className="rounded-lg border border-gray-100 p-3 hover:border-brand-300 dark:border-gray-800">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-gray-800 dark:text-white/90">{deadline.document.vendor || deadline.document.original_name}</span>
+                        <Badge color={deadline.overdue ? "error" : deadline.days_remaining <= 30 ? "warning" : "info"} size="sm" variant="light">
+                          {deadline.overdue ? `${Math.abs(deadline.days_remaining)}d overdue` : `${deadline.days_remaining}d`}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs capitalize text-gray-500">{deadline.kind} · {deadline.date}</p>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No deadlines in the next 90 days</p>
+              )}
+            </div>
+
             <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
               <h3 className="text-sm font-medium text-gray-800 dark:text-white/90 mb-4">
                 By Document Type

@@ -55,6 +55,9 @@ export default function DocumentDetail() {
     retention_category: "",
     effective_date: "",
     expiration_date: "",
+    renewal_date: "",
+    review_date: "",
+    termination_date: "",
     review_notes: "",
   });
 
@@ -71,6 +74,9 @@ export default function DocumentDetail() {
           retention_category: loaded.retention_category || "",
           effective_date: loaded.effective_date || "",
           expiration_date: loaded.expiration_date || "",
+          renewal_date: loaded.renewal_date || "",
+          review_date: loaded.review_date || "",
+          termination_date: loaded.termination_date || "",
           review_notes: loaded.review_notes || "",
         });
         if (canReview) {
@@ -231,6 +237,9 @@ export default function DocumentDetail() {
                 <InfoRow label="Retention Category" value={doc.retention_category} />
                 <InfoRow label="Effective Date" value={doc.effective_date} />
                 <InfoRow label="Expiration Date" value={doc.expiration_date} />
+                <InfoRow label="Renewal Date" value={doc.renewal_date} />
+                <InfoRow label="Review Date" value={doc.review_date} />
+                <InfoRow label="Termination Date" value={doc.termination_date} />
                 <InfoRow
                   label="Processed Folder"
                   value={
@@ -271,6 +280,9 @@ export default function DocumentDetail() {
                   ["retention_category", "Retention Category"],
                   ["effective_date", "Effective Date"],
                   ["expiration_date", "Expiration Date"],
+                  ["renewal_date", "Renewal Date"],
+                  ["review_date", "Review Date"],
+                  ["termination_date", "Termination Date"],
                 ] as [keyof typeof form, string][]).map(([field, label]) => (
                   <label key={field} className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
                     {label}
@@ -310,6 +322,14 @@ export default function DocumentDetail() {
                   <p className="text-sm font-medium text-error-600 dark:text-error-500">Error</p>
                 </div>
                 <p className="text-sm text-error-600 dark:text-error-400">{doc.error_message}</p>
+              </div>
+            )}
+            {doc.extracted_text && (
+              <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                <h3 className="mb-3 text-sm font-medium text-gray-800 dark:text-white/90">Extracted Text</h3>
+                <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-xs leading-5 text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                  {doc.extracted_text}
+                </pre>
               </div>
             )}
           </div>

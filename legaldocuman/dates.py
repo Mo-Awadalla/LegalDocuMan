@@ -96,6 +96,12 @@ class DateExtractor:
             r'renewal\s+period\s+(?:begins|starts)\s+([^\.;\n]+)'
         ]
 
+        termination_patterns = [
+            r'termination\s+date\s+(?:is\s+|of\s+|on\s+)?([^\.;\n]+)',
+            r'shall\s+terminate\s+on\s+([^\.;\n]+)',
+            r'terminates\s+on\s+([^\.;\n]+)'
+        ]
+
         review_patterns = [
             r'review\s+(?:date\s+)?(?:on\s+)?([^\.;\n]+)',
             r'shall\s+be\s+reviewed\s+(?:on\s+)?([^\.;\n]+)',
@@ -105,6 +111,7 @@ class DateExtractor:
         metadata['effective_date'] = self._extract_first_date(text, effective_patterns, dateparser)
         metadata['expiration_date'] = self._extract_first_date(text, expiration_patterns, dateparser)
         metadata['renewal_date'] = self._extract_first_date(text, renewal_patterns, dateparser)
+        metadata['termination_date'] = self._extract_first_date(text, termination_patterns, dateparser)
         metadata['review_date'] = self._extract_first_date(text, review_patterns, dateparser)
 
         dates_found = [k for k, v in metadata.items() if v is not None]

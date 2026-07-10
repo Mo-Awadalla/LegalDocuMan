@@ -44,6 +44,9 @@ export interface Document {
   execution_status: string | null;
   effective_date: string | null;
   expiration_date: string | null;
+  renewal_date: string | null;
+  review_date: string | null;
+  termination_date: string | null;
   retention_category: string | null;
   generated_filename: string | null;
   processed_folder: string | null;
@@ -63,6 +66,15 @@ export interface Document {
 
 export interface DocumentDetail extends Document {
   metadata_json: Record<string, unknown> | null;
+  extracted_text: string | null;
+}
+
+export interface DocumentDeadline {
+  document: Document;
+  kind: "expiration" | "renewal" | "review" | "termination";
+  date: string;
+  days_remaining: number;
+  overdue: boolean;
 }
 
 export interface AuditEvent {
@@ -234,6 +246,11 @@ export async function listDocuments(params?: {
 export async function getDocumentStats(): Promise<DocumentStats> {
   const response = await fetch(`${BASE_URL}/documents/stats`, { headers: authHeaders() });
   return handleResponse<DocumentStats>(response);
+}
+
+export async function getDocumentDeadlines(days = 90): Promise<{ deadlines: DocumentDeadline[]; days: number }> {
+  const response = await fetch(`${BASE_URL}/documents/deadlines?days=${days}`, { headers: authHeaders() });
+  return handleResponse<{ deadlines: DocumentDeadline[]; days: number }>(response);
 }
 
 export async function getJobStatus(id: number): Promise<DocumentJob> {

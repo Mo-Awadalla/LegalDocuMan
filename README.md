@@ -30,6 +30,8 @@ curl http://localhost:5000/api/v1/jobs/<job_id>
 - **Smart Naming** — `K_VendorName_documentType_001.pdf` or `YYYYMMDD_Vendor_Original.pdf`
 - **Folder Organization** — `_final` (executed) vs `_supporting` (unsigned / draft / exhibit)
 - **Date Extraction** — effective, expiration, renewal, and review dates from content
+- **Contract Lifecycle Dashboard** — surfaces overdue and upcoming expiration, renewal, review, and termination dates
+- **Full-Text Contract Search** — searches filenames, vendors, and persisted extracted document text
 - **Vendor Matching** — fuzzy match against a master vendor list
 - **Pluggable OCR Backends** — Tesseract (default, local) or NVIDIA (NeMo / Triton / TAO, stub ready)
 - **Retention Category Mapping** — auto-assigns retention policies (long_term, indefinite, short_term, tied_to_parent)
