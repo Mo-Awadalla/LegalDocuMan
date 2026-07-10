@@ -2,7 +2,7 @@ import csv
 import io
 import os
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, Response, current_app, jsonify, request, send_file
 from sqlalchemy import func
@@ -58,6 +58,9 @@ def _doc_to_dict(doc):
         "execution_status": doc.execution_status,
         "effective_date": doc.effective_date.isoformat() if doc.effective_date else None,
         "expiration_date": doc.expiration_date.isoformat() if doc.expiration_date else None,
+        "renewal_date": doc.renewal_date.isoformat() if doc.renewal_date else None,
+        "review_date": doc.review_date.isoformat() if doc.review_date else None,
+        "termination_date": doc.termination_date.isoformat() if doc.termination_date else None,
         "retention_category": doc.retention_category,
         "generated_filename": doc.generated_filename,
         "processed_folder": doc.processed_folder,
@@ -405,6 +408,7 @@ def list_documents():
         query = query.filter(
             Document.original_name.ilike(f"%{search}%")
             | Document.vendor.ilike(f"%{search}%")
+            | Document.extracted_text.ilike(f"%{search}%")
         )
 
     query = query.order_by(Document.created_at.desc())
@@ -442,7 +446,24 @@ def export_documents_csv():
     fields = ["id", "original_name", "document_type", "vendor", "execution_status", "effective_date", "expiration_date", "retention_category", "review_status", "created_at"]
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
-    for doc in _doc_query().order_by(Document.created_at.desc()).all():
+    query = _doc_query()
+    status = request.args.get("status")
+    doc_type = request.args.get("type")
+    search = request.args.get("search")
+    if status:
+        try:
+            query = query.filter(Document.status == DocumentStatus(status))
+        except ValueError:
+            pass
+    if doc_type:
+        query = query.filter(Document.document_type == doc_type)
+    if search:
+        query = query.filter(
+            Document.original_name.ilike(f"%{search}%")
+            | Document.vendor.ilike(f"%{search}%")
+            | Document.extracted_text.ilike(f"%{search}%")
+        )
+    for doc in query.order_by(Document.created_at.desc()).all():
         row = _doc_to_dict(doc)
         writer.writerow({field: row.get(field) for field in fields})
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=documents.csv"})
@@ -457,7 +478,36 @@ def get_document(doc_id):
 
     result = _doc_to_dict(doc)
     result["metadata_json"] = doc.metadata_json
+    result["extracted_text"] = doc.extracted_text
     return jsonify(result)
+
+
+@api_bp.route("/documents/deadlines")
+@auth_required()
+def document_deadlines():
+    days = max(1, min(request.args.get("days", 90, type=int), 3650))
+    today = date.today()
+    cutoff = today + timedelta(days=days)
+    date_fields = (
+        ("expiration", Document.expiration_date),
+        ("renewal", Document.renewal_date),
+        ("review", Document.review_date),
+        ("termination", Document.termination_date),
+    )
+    items = []
+    for kind, field in date_fields:
+        docs = _doc_query().filter(field.isnot(None), field <= cutoff).all()
+        for doc in docs:
+            deadline = getattr(doc, f"{kind}_date")
+            items.append({
+                "document": _doc_to_dict(doc),
+                "kind": kind,
+                "date": deadline.isoformat(),
+                "days_remaining": (deadline - today).days,
+                "overdue": deadline < today,
+            })
+    items.sort(key=lambda item: (item["date"], item["document"]["id"], item["kind"]))
+    return jsonify({"deadlines": items, "days": days})
 
 
 @api_bp.route("/documents/<int:doc_id>", methods=["PATCH"])
@@ -508,6 +558,13 @@ def update_document(doc_id):
             return jsonify({"error": error}), 400
         doc.expiration_date = value
         changes["expiration_date"] = data.get("expiration_date")
+    for field in ("renewal_date", "review_date", "termination_date"):
+        if field in data:
+            value, error = _parse_date(data.get(field), field)
+            if error:
+                return jsonify({"error": error}), 400
+            setattr(doc, field, value)
+            changes[field] = data.get(field)
     if doc.effective_date and doc.expiration_date and doc.expiration_date < doc.effective_date:
         return jsonify({"error": "expiration_date cannot be before effective_date"}), 400
     if data.get("mark_reviewed"):

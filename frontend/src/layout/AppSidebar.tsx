@@ -49,13 +49,18 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { logout, user } = useAuth();
   const location = useLocation();
-  const visibleNavItems = useMemo<NavItem[]>(() => user?.role === "admin"
-    ? [
-        ...navItems,
+  const visibleNavItems = useMemo<NavItem[]>(() => {
+    const roleItems = user?.role === "user"
+      ? navItems.filter((item) => item.path !== "/documents/review-queue")
+      : navItems;
+    return user?.role === "admin"
+      ? [
+        ...roleItems,
         { icon: <UserIcon />, name: "Tenant", path: "/admin/tenant" },
         { icon: <GroupIcon />, name: "Users", path: "/admin/users" },
       ]
-    : navItems, [user?.role]);
+      : roleItems;
+  }, [user?.role]);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main" | "others";

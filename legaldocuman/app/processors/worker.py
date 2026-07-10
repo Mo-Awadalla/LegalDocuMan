@@ -92,6 +92,11 @@ def _process_document(job_id):
         if record.date_metadata.get("expiration_date"):
             doc.expiration_date = datetime.strptime(record.date_metadata["expiration_date"], "%Y-%m-%d").date()
 
+        for field in ("renewal_date", "review_date", "termination_date"):
+            if record.date_metadata.get(field):
+                setattr(doc, field, datetime.strptime(record.date_metadata[field], "%Y-%m-%d").date())
+        doc.extracted_text = record.text_content
+
         generated_filename = intake.generate_filename_from_original(record, doc.original_name, unique_id=doc.id)
         doc.metadata_json = {
             "document_type": record.doc_type,
