@@ -12,7 +12,7 @@ import {
   DownloadIcon,
 } from "../../icons";
 import { useAuth } from "../../auth/AuthContext";
-import { createDocumentDownloadUrl, getDocument, getDocumentAudit, updateDocument, type AuditEvent, type DocumentDetail as DocDetail } from "../../services/api";
+import { createDocumentDownloadUrl, createDocumentRelationship, deleteDocumentRelationship, getDocument, getDocumentAudit, getDocumentRelationships, updateDocument, type AuditEvent, type DocumentDetail as DocDetail, type DocumentRelationship } from "../../services/api";
 
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
@@ -48,6 +48,9 @@ export default function DocumentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [relationships, setRelationships] = useState<DocumentRelationship[]>([]);
+  const [relationshipTarget, setRelationshipTarget] = useState("");
+  const [relationshipType, setRelationshipType] = useState<DocumentRelationship["relationship_type"]>("amends");
   const [form, setForm] = useState({
     document_type: "",
     vendor: "",
@@ -64,9 +67,10 @@ export default function DocumentDetail() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    getDocument(Number(id))
-      .then((loaded) => {
+    Promise.all([getDocument(Number(id)), getDocumentRelationships(Number(id))])
+      .then(([loaded, relationshipData]) => {
         setDoc(loaded);
+        setRelationships(relationshipData.relationships);
         setForm({
           document_type: loaded.document_type || "",
           vendor: loaded.vendor || "",
@@ -126,6 +130,39 @@ export default function DocumentDetail() {
 
   const setField = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const addRelationship = async () => {
+    if (!doc || !relationshipTarget) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createDocumentRelationship(doc.id, {
+        target_document_id: Number(relationshipTarget),
+        relationship_type: relationshipType,
+      });
+      const data = await getDocumentRelationships(doc.id);
+      setRelationships(data.relationships);
+      setRelationshipTarget("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to link document");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeRelationship = async (relationshipId: number) => {
+    if (!doc) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteDocumentRelationship(doc.id, relationshipId);
+      setRelationships((items) => items.filter((item) => item.id !== relationshipId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to unlink document");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -260,6 +297,34 @@ export default function DocumentDetail() {
               </div>
             </div>
 
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-white/90">Contract Family</h3>
+                <p className="text-xs text-gray-500">Connect amendments, SOWs, exhibits, renewals, and superseding agreements.</p>
+              </div>
+              {relationships.length ? (
+                <div className="mb-4 flex flex-col gap-2">
+                  {relationships.map((relationship) => (
+                    <div key={relationship.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                      <div className="min-w-0">
+                        <Link to={`/documents/${relationship.related_document.id}`} className="truncate text-sm font-medium text-brand-500 hover:text-brand-600">{relationship.related_document.original_name}</Link>
+                        <p className="text-xs capitalize text-gray-500">{relationship.direction} · {relationship.relationship_type.replace(/_/g, " ")}</p>
+                      </div>
+                      {canReview && <button type="button" disabled={saving} onClick={() => removeRelationship(relationship.id)} className="text-xs text-error-500 hover:text-error-600 disabled:opacity-50">Unlink</button>}
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="mb-4 text-sm text-gray-500">No related documents yet.</p>}
+              {canReview && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <input type="number" min="1" value={relationshipTarget} onChange={(event) => setRelationshipTarget(event.target.value)} placeholder="Related document ID" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" />
+                  <select value={relationshipType} onChange={(event) => setRelationshipType(event.target.value as DocumentRelationship["relationship_type"])} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+                    <option value="amends">Amends</option><option value="statement_of_work">Statement of work</option><option value="exhibit">Exhibit</option><option value="renewal">Renewal</option><option value="supersedes">Supersedes</option><option value="related">Related</option>
+                  </select>
+                  <button type="button" onClick={addRelationship} disabled={saving || !relationshipTarget} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">Link</button>
+                </div>
+              )}
+            </div>
 
             {canReview && (
               <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">

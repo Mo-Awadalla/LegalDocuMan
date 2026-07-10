@@ -131,6 +131,28 @@ class Document(db.Model):
         return sha.hexdigest()
 
 
+class DocumentRelationship(db.Model):
+    __tablename__ = "document_relationships"
+    __table_args__ = (
+        db.UniqueConstraint("source_document_id", "target_document_id", name="uq_document_relationship_pair"),
+        db.CheckConstraint("source_document_id <> target_document_id", name="ck_document_relationship_distinct"),
+        db.Index("ix_document_relationships_tenant_source", "tenant_id", "source_document_id"),
+        db.Index("ix_document_relationships_tenant_target", "tenant_id", "target_document_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    source_document_id = db.Column(db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    target_document_id = db.Column(db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    relationship_type = db.Column(db.String(50), nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    source_document = db.relationship("Document", foreign_keys=[source_document_id])
+    target_document = db.relationship("Document", foreign_keys=[target_document_id])
+    created_by = db.relationship("User")
+
+
 class AuditEvent(db.Model):
     __tablename__ = "audit_events"
     __table_args__ = (db.Index("ix_audit_events_tenant_created", "tenant_id", "created_at"),)
