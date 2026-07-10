@@ -77,6 +77,15 @@ export interface DocumentDeadline {
   overdue: boolean;
 }
 
+export interface DocumentRelationship {
+  id: number;
+  relationship_type: "amends" | "statement_of_work" | "exhibit" | "renewal" | "supersedes" | "related";
+  direction: "incoming" | "outgoing";
+  related_document: Document;
+  created_by_id: number | null;
+  created_at: string | null;
+}
+
 export interface AuditEvent {
   id: number;
   action: string;
@@ -207,6 +216,34 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
 export async function getDocument(id: number): Promise<DocumentDetail> {
   const response = await fetch(`${BASE_URL}/documents/${id}`, { headers: authHeaders() });
   return handleResponse<DocumentDetail>(response);
+}
+
+export async function getDocumentRelationships(id: number): Promise<{ relationships: DocumentRelationship[] }> {
+  const response = await fetch(`${BASE_URL}/documents/${id}/relationships`, { headers: authHeaders() });
+  return handleResponse<{ relationships: DocumentRelationship[] }>(response);
+}
+
+export async function createDocumentRelationship(
+  id: number,
+  payload: { target_document_id: number; relationship_type: DocumentRelationship["relationship_type"] },
+): Promise<DocumentRelationship> {
+  const response = await fetch(`${BASE_URL}/documents/${id}/relationships`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<DocumentRelationship>(response);
+}
+
+export async function deleteDocumentRelationship(documentId: number, relationshipId: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/documents/${documentId}/relationships/${relationshipId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new ApiError(error.error || `HTTP ${response.status}`, response.status);
+  }
 }
 
 export async function updateDocument(id: number, payload: Partial<Document> & { mark_reviewed?: boolean }): Promise<DocumentDetail> {

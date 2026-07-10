@@ -5,7 +5,7 @@ import zipfile
 from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, Response, current_app, jsonify, request, send_file
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
@@ -13,7 +13,7 @@ from legaldocuman.storage import get_storage_backend
 
 from ..auth import api_key_authenticated, audit, auth_required, authenticate_request, current_tenant_id, current_user, issue_download_token, issue_token, load_download_token
 from ..extensions import db
-from ..models import AuditEvent, Document, DocumentJob, DocumentJobStatus, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
+from ..models import AuditEvent, Document, DocumentJob, DocumentJobStatus, DocumentRelationship, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
 from ..processors.worker import process_document_async
 from ..security import MalwareScanner
 
@@ -24,6 +24,7 @@ DOCUMENT_TYPES = {"MSA", "SOW", "NDA", "PO", "AMD", "LICENSE", "CONTRACT", "AGRE
 EXECUTION_STATUSES = {"draft", "final", "signed", "unsigned", "partially_executed", "unknown"}
 RETENTION_CATEGORIES = {"short_term", "long_term", "indefinite", "tied_to_parent", "contracts", "review_required"}
 MAX_REVIEW_NOTES = 4000
+RELATIONSHIP_TYPES = {"amends", "statement_of_work", "exhibit", "renewal", "supersedes", "related"}
 
 
 def _enum_value(value):
@@ -108,6 +109,19 @@ def _audit_to_dict(event):
         "details": event.details,
         "ip_address": event.ip_address,
         "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+def _relationship_to_dict(relationship, document_id):
+    is_outgoing = relationship.source_document_id == document_id
+    related = relationship.target_document if is_outgoing else relationship.source_document
+    return {
+        "id": relationship.id,
+        "relationship_type": relationship.relationship_type,
+        "direction": "outgoing" if is_outgoing else "incoming",
+        "related_document": _doc_to_dict(related),
+        "created_by_id": relationship.created_by_id,
+        "created_at": relationship.created_at.isoformat() if relationship.created_at else None,
     }
 
 
@@ -480,6 +494,86 @@ def get_document(doc_id):
     result["metadata_json"] = doc.metadata_json
     result["extracted_text"] = doc.extracted_text
     return jsonify(result)
+
+
+@api_bp.route("/documents/<int:doc_id>/relationships")
+@auth_required()
+def document_relationships(doc_id):
+    doc = _get_doc_or_404(doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+    relationships = DocumentRelationship.query.filter(
+        DocumentRelationship.tenant_id == doc.tenant_id,
+        or_(
+            DocumentRelationship.source_document_id == doc.id,
+            DocumentRelationship.target_document_id == doc.id,
+        ),
+    ).order_by(DocumentRelationship.created_at.asc()).all()
+    return jsonify({"relationships": [_relationship_to_dict(item, doc.id) for item in relationships]})
+
+
+@api_bp.route("/documents/<int:doc_id>/relationships", methods=["POST"])
+@auth_required([UserRole.ADMIN, UserRole.REVIEWER])
+def create_document_relationship(doc_id):
+    source = _get_doc_or_404(doc_id)
+    if not source:
+        return jsonify({"error": "Document not found"}), 404
+    data = request.get_json(silent=True) or {}
+    target_id = data.get("target_document_id")
+    relationship_type = (data.get("relationship_type") or "").strip().lower()
+    if not isinstance(target_id, int) or target_id == source.id:
+        return jsonify({"error": "target_document_id must identify a different document"}), 400
+    if relationship_type not in RELATIONSHIP_TYPES:
+        return jsonify({"error": "Invalid relationship_type"}), 400
+    target = _get_doc_or_404(target_id)
+    if not target:
+        return jsonify({"error": "Related document not found"}), 404
+    existing = DocumentRelationship.query.filter_by(
+        tenant_id=source.tenant_id,
+        source_document_id=source.id,
+        target_document_id=target.id,
+    ).first()
+    if existing:
+        return jsonify({"error": "Relationship already exists"}), 409
+    user = current_user()
+    relationship = DocumentRelationship(
+        tenant_id=source.tenant_id,
+        source_document_id=source.id,
+        target_document_id=target.id,
+        relationship_type=relationship_type,
+        created_by_id=user.id if user else None,
+    )
+    db.session.add(relationship)
+    db.session.flush()
+    audit("document.relationship.create", document_id=source.id, details={
+        "relationship_id": relationship.id,
+        "target_document_id": target.id,
+        "relationship_type": relationship_type,
+    })
+    db.session.commit()
+    return jsonify(_relationship_to_dict(relationship, source.id)), 201
+
+
+@api_bp.route("/documents/<int:doc_id>/relationships/<int:relationship_id>", methods=["DELETE"])
+@auth_required([UserRole.ADMIN, UserRole.REVIEWER])
+def delete_document_relationship(doc_id, relationship_id):
+    doc = _get_doc_or_404(doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+    relationship = DocumentRelationship.query.filter(
+        DocumentRelationship.id == relationship_id,
+        DocumentRelationship.tenant_id == doc.tenant_id,
+        or_(
+            DocumentRelationship.source_document_id == doc.id,
+            DocumentRelationship.target_document_id == doc.id,
+        ),
+    ).first()
+    if not relationship:
+        return jsonify({"error": "Relationship not found"}), 404
+    audit("document.relationship.delete", document_id=doc.id, details={"relationship_id": relationship.id})
+    db.session.delete(relationship)
+    db.session.commit()
+    return "", 204
 
 
 @api_bp.route("/documents/deadlines")
