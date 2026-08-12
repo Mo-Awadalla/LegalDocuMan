@@ -37,10 +37,19 @@ class CapableWorker(Worker):
         )
         super().__init__(*args, **kwargs)
 
+    def _publish_capabilities(self, connection=None):
+        connection = connection if connection is not None else self.connection
+        connection.setex(self.capability_key, self.capability_ttl, self.capability_payload)
+
+    def register_birth(self):
+        # RQ rejects an existing, live worker key during registration. Publish
+        # our separate capability key only after RQ has registered the worker.
+        super().register_birth()
+        self._publish_capabilities()
+
     def heartbeat(self, timeout=None, pipeline=None):
         result = super().heartbeat(timeout=timeout, pipeline=pipeline)
-        connection = pipeline if pipeline is not None else self.connection
-        connection.setex(self.capability_key, self.capability_ttl, self.capability_payload)
+        self._publish_capabilities(pipeline)
         return result
 
 
@@ -76,7 +85,6 @@ def _run_worker(slot, shutdown=None):
             capabilities=capabilities,
             worker_ttl=45,
         )
-        worker.heartbeat()
         try:
             worker.work(with_scheduler=True)
         finally:
