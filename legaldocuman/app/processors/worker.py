@@ -19,6 +19,7 @@ from legaldocuman.intake import DocumentIntake
 from legaldocuman.storage import get_storage_backend, local_file_for_processing
 
 from ..extensions import db
+from ..job_ids import rq_job_id
 from ..models import (
     AuditEvent,
     Document,
@@ -112,7 +113,7 @@ def enqueue_rq(job_id, *, replace_existing=False):
     job = db.session.get(DocumentJob, job_id)
     if not job:
         return None
-    rq_id = job.rq_job_id or f"document-job:{job.id}"
+    rq_id = job.rq_job_id or rq_job_id(job.id)
     connection = Redis.from_url(current_app.config["REDIS_URL"])
     queue = Queue(current_app.config["RQ_QUEUE"], connection=connection)
     existing = Job.fetch(rq_id, connection=connection) if Job.exists(rq_id, connection=connection) else None
@@ -472,7 +473,7 @@ def _mark_queued(job_id, rq_id=None):
     job.status = DocumentJobStatus.QUEUED
     job.queued_at = _now()
     job.retry_at = None
-    job.rq_job_id = rq_id or job.rq_job_id or f"document-job:{job.id}"
+    job.rq_job_id = rq_id or job.rq_job_id or rq_job_id(job.id)
     db.session.commit()
 
 

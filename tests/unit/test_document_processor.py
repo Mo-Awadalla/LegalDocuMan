@@ -110,6 +110,10 @@ class TestDocumentTypeClassifier:
         dtc = DocumentTypeClassifier()
         assert dtc.identify_type("", "contract msa 2024.pdf") == "MSA"
 
+    def test_identify_msa_from_underscore_filename(self):
+        dtc = DocumentTypeClassifier()
+        assert dtc.identify_type("", "Synthetic_Acme_scanned_signed_MSA.pdf") == "MSA"
+
     def test_identify_sow(self):
         dtc = DocumentTypeClassifier()
         text = "Statement of Work for consulting services."
@@ -150,6 +154,13 @@ class TestDocumentTypeClassifier:
 # =====================================================================
 
 class TestDocumentStatusClassifier:
+    def test_one_high_confidence_visual_signature_is_final(self, monkeypatch):
+        dsc = DocumentStatusClassifier()
+        dsc.signature_detector = object()
+        monkeypatch.setattr(dsc, "_detect_signatures_visual", lambda _path: [{"confidence": 0.85}])
+
+        assert dsc.classify_status("signed_msa.pdf", "", file_path="signed_msa.pdf") == "final"
+
     def test_final_with_digital_signature(self):
         dsc = DocumentStatusClassifier()
         text = "This agreement was digitally signed by John Smith on 12/15/2023."

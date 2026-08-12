@@ -24,6 +24,7 @@ from ..auth import (
     load_download_token,
 )
 from ..extensions import db
+from ..job_ids import rq_job_id
 from ..jobs import redrive_job
 from ..models import (
     AuditEvent,
@@ -424,7 +425,7 @@ def upload_file():
     )
     db.session.add(job)
     db.session.flush()
-    job.rq_job_id = f"document-job:{job.id}"
+    job.rq_job_id = rq_job_id(job.id)
     audit("document.upload", document_id=doc.id, details={"filename": original_name, "storage_backend": storage.name, "job_id": job.id})
     db.session.commit()
 

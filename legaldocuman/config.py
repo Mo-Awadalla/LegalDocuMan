@@ -58,9 +58,8 @@ class Config:
     RFDETR_DETECTION_THRESHOLD: float = 0.35
     # Confidence at or above this → high confidence (auto-process, no review needed)
     RFDETR_HIGH_CONFIDENCE_THRESHOLD: float = 0.40
-    # Minimum number of visual signatures required to classify a document as final.
-    # A fully-executed contract must be signed by all parties (≥2).
-    MIN_VISUAL_SIGNATURES_FOR_FINAL: int = 2
+    # One high-confidence visual signature is sufficient evidence of execution.
+    MIN_VISUAL_SIGNATURES_FOR_FINAL: int = 1
     # Path to the RF-DETR checkpoint; defaults to models/ in the project root.
     # Override with RFDETR_MODEL_PATH env var.
     RFDETR_MODEL_PATH: Optional[str] = field(

@@ -58,8 +58,11 @@ class DocumentTypeClassifier:
 
     def identify_type(self, text, filename=""):
         """Identify document type from text and filename."""
-        combined_text = f"{filename} {text}".lower()
-        filename_lower = filename.lower()
+        # Upload filenames commonly separate words with underscores/hyphens.
+        # Normalize those separators so word-boundary patterns see `MSA` as a
+        # token instead of part of one long identifier.
+        filename_lower = re.sub(r"[_-]+", " ", filename.lower())
+        combined_text = f"{filename_lower} {text}".lower()
 
         type_scores = {}
         for doc_type, patterns in self.type_patterns.items():

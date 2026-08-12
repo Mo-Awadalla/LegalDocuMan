@@ -93,6 +93,9 @@ class DocumentIntake:
         filename = os.path.basename(file_path)
 
         try:
+            if file_path.lower().endswith(".pdf") and self.text_extractor.page_renderer.total_pages(file_path) <= 0:
+                raise ValueError("PDF could not be parsed")
+
             # 1. Progressive OCR of the front pages through the shared renderer
             text_content, region_found, pages_read = self.smart_reader.read(file_path)
             if pages_read:
