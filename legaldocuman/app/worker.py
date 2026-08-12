@@ -13,7 +13,7 @@ import threading
 import time
 
 from redis import Redis
-from rq import Queue, Worker
+from rq import Queue, SimpleWorker
 
 from legaldocuman.app import create_app
 from legaldocuman.app.processors.worker import (
@@ -25,7 +25,7 @@ from legaldocuman.app.processors.worker import (
 HEARTBEAT_PREFIX = "legaldocuman:worker:"
 
 
-class CapableWorker(Worker):
+class CapableWorker(SimpleWorker):
     """Refresh the readiness capability key with RQ's native heartbeat."""
 
     def __init__(self, *args, capability_ttl=75, capabilities=None, **kwargs):
@@ -59,7 +59,8 @@ def _run_worker(slot, shutdown=None):
         connection = Redis.from_url(app.config["REDIS_URL"])
         queue = Queue(app.config["RQ_QUEUE"], connection=connection)
         name = f"{socket.gethostname()}-{slot}-{os.getpid()}"
-        # RQ forks workhorses on Linux; this initialized model is inherited copy-on-write.
+        # Each supervised process owns one model and executes jobs in-process.
+        # Forking after PyTorch initializes native thread pools can deadlock inference.
         capabilities = {"ocr": False, "signature": False}
         while not (shutdown and shutdown.is_set()):
             pipeline = preload_pipeline()

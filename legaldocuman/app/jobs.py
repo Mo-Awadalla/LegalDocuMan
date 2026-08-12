@@ -8,6 +8,7 @@ from flask import current_app
 from flask.cli import AppGroup
 
 from .extensions import db
+from .job_ids import rq_job_id
 from .models import AuditEvent, Document, DocumentJob, DocumentJobAttempt, DocumentJobStatus, DocumentStatus
 from .processors.worker import enqueue_rq
 
@@ -42,7 +43,7 @@ def redrive_job(job):
     )
     db.session.add(child)
     db.session.flush()
-    child.rq_job_id = f"document-job:{child.id}"
+    child.rq_job_id = rq_job_id(child.id)
     document = db.session.get(Document, job.document_id)
     if document:
         document.status = DocumentStatus.PENDING

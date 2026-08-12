@@ -49,11 +49,11 @@ def wait_for_job(job_id, timeout=900):
 def test_real_signed_msa_smoke():
     status, headers, uploaded = upload(FIXTURES / "Synthetic_Acme_LLC_scanned_signed_MSA.pdf")
     assert status == 201
-    assert headers["X-Correlation-Id"] == "e2e-smoke-correlation"
+    assert headers["X-Correlation-ID"] == "e2e-smoke-correlation"
     job = wait_for_job(uploaded["job_id"])
     assert job["status"] == "completed", job
     assert job["correlation_id"] == "e2e-smoke-correlation"
-    assert job["rq_job_id"] == f"document-job:{job['id']}"
+    assert job["rq_job_id"] == f"document-job-{job['id']}"
     assert len(job["attempt_history"]) == 1
     assert job["attempt_history"][0]["status"] == "completed"
 
