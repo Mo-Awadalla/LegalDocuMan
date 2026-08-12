@@ -55,7 +55,7 @@ class PageRenderer:
             with pdfplumber.open(file_path) as pdf:
                 return len(pdf.pages)
         except Exception as exc:
-            logging.debug(f"total_pages failed for {file_path}: {exc}")
+            logging.debug("PDF page count failed (error_type=%s)", exc.__class__.__name__)
             return 0
 
     def last_n_offset(self, file_path: str, n: int) -> Tuple[int, int]:
@@ -93,7 +93,7 @@ class PageRenderer:
                     return images[0]
             except Exception:
                 continue
-        logging.debug(f"Failed to render page {page_num} of {file_path}")
+        logging.debug("Failed to render PDF page %s", page_num)
         return None
 
     def clear_cache(self):
@@ -217,7 +217,7 @@ class TextExtractor:
                 text += paragraph.text + "\n"
             return text[:self.cfg.TEXT_OUTPUT_LIMIT]
         except Exception as e:
-            logging.error(f"Error processing DOCX {file_path}: {e}")
+            logging.error("DOCX extraction failed (error_type=%s)", e.__class__.__name__)
             return ""
 
     def extract_text(self, file_path, max_pages=None):
@@ -233,7 +233,7 @@ class TextExtractor:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     return f.read()[:self.cfg.TXT_OUTPUT_LIMIT]
             except Exception as e:
-                logging.error(f"Error reading text file {file_path}: {e}")
+                logging.error("Text extraction failed (error_type=%s)", e.__class__.__name__)
                 return ""
         else:
             return ""

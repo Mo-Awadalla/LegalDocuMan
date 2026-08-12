@@ -30,6 +30,11 @@ class StorageBackend(ABC):
     def save_path(self, path, filename):
         ...
 
+    @abstractmethod
+    def publish_result(self, path, document_id, filename):
+        """Atomically replace the deterministic result for a document."""
+        ...
+
     @property
     @abstractmethod
     def name(self):
@@ -69,6 +74,21 @@ class LocalStorageBackend(StorageBackend):
         dest = os.path.join(job_dir, safe_name)
         shutil.copy2(path, dest)
         return dest
+
+    def publish_result(self, path, document_id, filename):
+        safe_name = secure_filename(filename) or "result"
+        result_dir = os.path.join(self.base_dir, "results", str(document_id))
+        os.makedirs(result_dir, exist_ok=True)
+        destination = os.path.join(result_dir, safe_name)
+        fd, temporary = tempfile.mkstemp(prefix=".publish-", dir=result_dir)
+        os.close(fd)
+        try:
+            shutil.copy2(path, temporary)
+            os.replace(temporary, destination)
+        finally:
+            if os.path.exists(temporary):
+                os.remove(temporary)
+        return destination
 
     @property
     def name(self):
@@ -119,6 +139,17 @@ class S3StorageBackend(StorageBackend):
     def save_path(self, path, filename):
         key = self._key(filename)
         self.client.upload_file(path, self.bucket, key)
+        return f"s3://{self.bucket}/{key}"
+
+    def publish_result(self, path, document_id, filename):
+        safe_name = secure_filename(filename) or "result"
+        key = "/".join(part for part in (self.prefix, "results", str(document_id), safe_name) if part)
+        staging_key = f"{key}.staging-{uuid.uuid4().hex}"
+        self.client.upload_file(path, self.bucket, staging_key)
+        try:
+            self.client.copy_object(Bucket=self.bucket, Key=key, CopySource={"Bucket": self.bucket, "Key": staging_key})
+        finally:
+            self.client.delete_object(Bucket=self.bucket, Key=staging_key)
         return f"s3://{self.bucket}/{key}"
 
     @property

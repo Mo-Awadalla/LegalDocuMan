@@ -112,3 +112,36 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pip-audit
           pip-audit -r requirements.txt
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: legaldocuman:ci
+          cache-from: type=gha,scope=legaldocuman-rfdetr
+          cache-to: type=gha,mode=max,scope=legaldocuman-rfdetr
+      - run: LEGALDOCUMAN_IMAGE=legaldocuman:ci docker compose up -d --no-build --wait
+      - name: Migration round-trip
+        run: |
+          docker compose exec -T app flask --app run.py db downgrade 0006_document_relationships
+          docker compose exec -T app flask --app run.py db upgrade
+      - run: >-
+          docker compose exec -T
+          -e RUN_REAL_E2E=1
+          -e E2E_BASE_URL=http://localhost:5000
+          -e E2E_API_KEY=change-me-in-production
+          app pytest -q tests/e2e/test_real_pipeline.py
+      - if: always()
+        run: mkdir -p artifacts && docker compose logs --no-color > artifacts/docker.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-logs
+          path: artifacts
+      - if: always()
+        run: docker compose down -v

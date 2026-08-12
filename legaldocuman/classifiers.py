@@ -249,7 +249,7 @@ class DocumentStatusClassifier:
             images = renderer.render_range(file_path, first_page, first_page + n_pages - 1)
             return images, page_offset
         except Exception as exc:
-            logging.warning(f"PDF page rendering failed for {file_path}: {exc}")
+            logging.warning("PDF page rendering failed (error_type=%s)", exc.__class__.__name__)
             return [], 0
 
     def _extract_last_n_pages_text(self, file_path: str, n_pages: int) -> str:
@@ -265,7 +265,7 @@ class DocumentStatusClassifier:
                     text += page_text + "\n"
             return text
         except Exception as exc:
-            logging.warning(f"Last-{n_pages}-pages text extraction failed for {file_path}: {exc}")
+            logging.warning("Trailing-page text extraction failed (pages=%s, error_type=%s)", n_pages, exc.__class__.__name__)
             return ""
 
     def _detect_signatures_visual(self, file_path: str) -> List[Dict[str, Any]]:
@@ -307,7 +307,7 @@ class DocumentStatusClassifier:
         signatures_found = self._detect_signatures(search_text.lower())
 
         if signatures_found:
-            logging.info(f"Regex detected signatures — classifying as FINAL: {signatures_found}")
+            logging.info("Regex signature signal detected (count=%s)", len(signatures_found))
             return 'final'
 
         main_contract_indicators = ['agreement', 'contract', 'msa', 'nda', 'license']

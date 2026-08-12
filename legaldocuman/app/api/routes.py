@@ -1,19 +1,43 @@
 import csv
 import io
+import logging
 import os
 import zipfile
 from datetime import date, datetime, timedelta, timezone
 
-from flask import Blueprint, Response, current_app, jsonify, request, send_file
+from flask import Blueprint, Response, current_app, g, jsonify, request, send_file
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from legaldocuman.storage import get_storage_backend
 
-from ..auth import api_key_authenticated, audit, auth_required, authenticate_request, current_tenant_id, current_user, issue_download_token, issue_token, load_download_token
+from ..auth import (
+    api_key_authenticated,
+    audit,
+    auth_required,
+    authenticate_request,
+    current_tenant_id,
+    current_user,
+    issue_download_token,
+    issue_token,
+    load_download_token,
+)
 from ..extensions import db
-from ..models import AuditEvent, Document, DocumentJob, DocumentJobStatus, DocumentRelationship, DocumentStatus, ReviewStatus, ScanStatus, Tenant, User, UserRole
+from ..jobs import redrive_job
+from ..models import (
+    AuditEvent,
+    Document,
+    DocumentJob,
+    DocumentJobStatus,
+    DocumentRelationship,
+    DocumentStatus,
+    ReviewStatus,
+    ScanStatus,
+    Tenant,
+    User,
+    UserRole,
+)
 from ..processors.worker import process_document_async
 from ..security import MalwareScanner
 
@@ -66,6 +90,8 @@ def _doc_to_dict(doc):
         "generated_filename": doc.generated_filename,
         "processed_folder": doc.processed_folder,
         "storage_backend": doc.storage_backend,
+        "source_storage_key": doc.source_storage_key,
+        "result_storage_key": doc.result_storage_key,
         "file_size": doc.file_size,
         "checksum": doc.checksum,
         "scan_status": doc.scan_status.value,
@@ -83,6 +109,19 @@ def _doc_to_dict(doc):
 
 
 def _job_to_dict(job):
+    attempts = [{
+        "attempt_number": attempt.attempt_number,
+        "worker": attempt.worker_name,
+        "status": attempt.status,
+        "started_at": attempt.started_at.isoformat() if attempt.started_at else None,
+        "heartbeat_at": attempt.heartbeat_at.isoformat() if attempt.heartbeat_at else None,
+        "finished_at": attempt.finished_at.isoformat() if attempt.finished_at else None,
+        "duration_ms": attempt.duration_ms,
+        "retryable": attempt.retryable,
+        "error_code": attempt.error_code,
+        "error_message": attempt.error_message,
+        "termination_reason": attempt.termination_reason,
+    } for attempt in job.attempt_history]
     return {
         "id": job.id,
         "document_id": job.document_id,
@@ -92,6 +131,15 @@ def _job_to_dict(job):
         "attempts": job.attempts,
         "max_attempts": job.max_attempts,
         "last_error": job.last_error,
+        "failure_kind": job.failure_kind,
+        "correlation_id": job.correlation_id,
+        "rq_job_id": job.rq_job_id,
+        "parent_job_id": job.parent_job_id,
+        "queued_at": job.queued_at.isoformat() if job.queued_at else None,
+        "retry_at": job.retry_at.isoformat() if job.retry_at else None,
+        "heartbeat_at": job.heartbeat_at.isoformat() if job.heartbeat_at else None,
+        "duration_ms": sum(a.duration_ms or 0 for a in job.attempt_history),
+        "attempt_history": attempts,
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
         "created_at": job.created_at.isoformat() if job.created_at else None,
@@ -358,6 +406,7 @@ def upload_file():
         stored_path=filepath,
         storage_backend=storage.name,
         storage_key=filepath,
+        source_storage_key=filepath,
         file_size=os.path.getsize(filepath) if not filepath.startswith("s3://") else None,
         checksum=checksum,
         scan_status=ScanStatus(scan.status),
@@ -371,17 +420,24 @@ def upload_file():
         tenant_id=doc.tenant_id,
         backend=current_app.config.get("JOB_BACKEND", "thread"),
         status=DocumentJobStatus.PENDING,
+        correlation_id=g.correlation_id,
     )
     db.session.add(job)
     db.session.flush()
+    job.rq_job_id = f"document-job:{job.id}"
     audit("document.upload", document_id=doc.id, details={"filename": original_name, "storage_backend": storage.name, "job_id": job.id})
     db.session.commit()
 
-    process_document_async(job.id)
+    try:
+        process_document_async(job.id)
+    except Exception:
+        # The durable PENDING row is intentionally retained for reconciliation.
+        logging.getLogger("legaldocuman.jobs").exception("job enqueue failed", extra={"job_id": job.id})
     db.session.refresh(doc)
     db.session.refresh(job)
 
-    return jsonify({"id": doc.id, "job_id": job.id, "status": doc.status.value, "job_status": job.status.value}), 201
+    return jsonify({"id": doc.id, "job_id": job.id, "status": doc.status.value,
+                    "job_status": job.status.value, "correlation_id": job.correlation_id}), 201
 
 
 @api_bp.route("/jobs/<int:job_id>")
@@ -395,6 +451,23 @@ def job_status(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     return jsonify(_job_to_dict(job))
+
+
+@api_bp.route("/jobs/<int:job_id>/retry", methods=["POST"])
+@auth_required([UserRole.ADMIN])
+def retry_job(job_id):
+    query = DocumentJob.query.filter(DocumentJob.id == job_id)
+    tenant_id = current_tenant_id()
+    if tenant_id:
+        query = query.filter(DocumentJob.tenant_id == tenant_id)
+    job = query.first()
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    try:
+        child, created = redrive_job(job)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+    return jsonify(_job_to_dict(child)), 201 if created else 200
 
 
 @api_bp.route("/documents")
@@ -686,15 +759,16 @@ def download_document(doc_id):
         doc = _get_doc_or_404(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
-    storage = get_storage_backend() if doc.stored_path.startswith("s3://") else None
+    download_key = doc.result_storage_key or doc.stored_path
+    storage = get_storage_backend() if download_key.startswith("s3://") else None
     if storage:
-        if not storage.exists(doc.stored_path):
+        if not storage.exists(download_key):
             return jsonify({"error": "Stored file not found"}), 404
-        handle = storage.read(doc.stored_path)
+        handle = storage.read(download_key)
         return send_file(handle, as_attachment=True, download_name=doc.generated_filename or doc.original_name)
-    if not os.path.exists(doc.stored_path):
+    if not os.path.exists(download_key):
         return jsonify({"error": "Stored file not found"}), 404
-    return send_file(doc.stored_path, as_attachment=True, download_name=doc.generated_filename or doc.original_name)
+    return send_file(download_key, as_attachment=True, download_name=doc.generated_filename or doc.original_name)
 
 
 @api_bp.route("/documents/<int:doc_id>/download-token", methods=["POST"])

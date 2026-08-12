@@ -43,14 +43,14 @@ class RFDETRSignatureBackend(SignatureDetectorBackend):
 
     def _load(self, model_path: str) -> None:
         if not os.path.exists(model_path):
-            logging.error(f"RF-DETR model not found: {model_path}")
+            logging.error("RF-DETR model checkpoint not found")
             return
         try:
             from rfdetr import from_checkpoint
             # rfdetr manages device placement internally via ModelContext;
             # do not call .to() or .eval() on the returned object.
             self._model = from_checkpoint(str(model_path))
-            logging.info(f"RF-DETR signature detector loaded from {model_path}")
+            logging.info("RF-DETR signature detector loaded")
         except Exception as exc:
             logging.error(f"RF-DETR model load failed: {exc}")
 

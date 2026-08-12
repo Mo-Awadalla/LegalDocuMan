@@ -52,7 +52,7 @@ class VendorExtractor:
 
         if vendor_words:
             vendor_name = ' '.join(vendor_words)
-            logging.info(f"Extracted vendor '{vendor_name}' from folder '{folder_name}'")
+            logging.info("Vendor metadata inferred from folder")
             return vendor_name
 
         return folder_name

@@ -24,13 +24,14 @@ services:
     command: redis-server --appendonly yes
 
   app:
+    image: "${LEGALDOCUMAN_IMAGE:-legaldocuman:local}"
     build: .
     ports:
       - "${APP_PORT:-5000}:5000"
     environment:
       APP_ENV: ${APP_ENV:-local}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:***@db:5432/legaldocuman}
-      REDIS_URL: ${REDIS_URL:-redis://redis:***@example.com}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/legaldocuman}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JOB_BACKEND: ${JOB_BACKEND:-rq}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       API_KEY: ${API_KEY:-change-me-in-production}
@@ -55,6 +56,13 @@ services:
       UPLOAD_FOLDER: ${UPLOAD_FOLDER:-/project/uploads}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-20}
       AUTO_CREATE_DB: ${AUTO_CREATE_DB:-0}
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-2}"
+      RQ_QUEUE: ${RQ_QUEUE:-documents}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-900}
+      JOB_HEARTBEAT_SECONDS: ${JOB_HEARTBEAT_SECONDS:-15}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-90}
+      JOB_MAINTENANCE_SECONDS: ${JOB_MAINTENANCE_SECONDS:-30}
+      WORKER_HEARTBEAT_TTL_SECONDS: ${WORKER_HEARTBEAT_TTL_SECONDS:-75}
     depends_on:
       db:
         condition: service_healthy
@@ -64,8 +72,14 @@ services:
       - processed:/project/processed
       - uploads:/project/uploads
     command: sh -c "flask --app run.py db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers $${GUNICORN_WORKERS:-2} --threads $${GUNICORN_THREADS:-4} --timeout $${GUNICORN_TIMEOUT:-120} run:app"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/readyz >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
   worker:
+    image: "${LEGALDOCUMAN_IMAGE:-legaldocuman:local}"
     build: .
     environment:
       APP_ENV: ${APP_ENV:-local}
@@ -85,6 +99,13 @@ services:
       PROCESSED_FOLDER: ${PROCESSED_FOLDER:-/project/processed}
       UPLOAD_FOLDER: ${UPLOAD_FOLDER:-/project/uploads}
       AUTO_CREATE_DB: ${AUTO_CREATE_DB:-0}
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-2}"
+      RQ_QUEUE: ${RQ_QUEUE:-documents}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-900}
+      JOB_HEARTBEAT_SECONDS: ${JOB_HEARTBEAT_SECONDS:-15}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-90}
+      JOB_MAINTENANCE_SECONDS: ${JOB_MAINTENANCE_SECONDS:-30}
+      WORKER_HEARTBEAT_TTL_SECONDS: ${WORKER_HEARTBEAT_TTL_SECONDS:-75}
     depends_on:
       db:
         condition: service_healthy
@@ -94,6 +115,11 @@ services:
       - processed:/project/processed
       - uploads:/project/uploads
     command: python -m legaldocuman.app.worker
+    healthcheck:
+      test: ["CMD-SHELL", "flask --app run.py jobs health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
 
 volumes:
   pgdata:

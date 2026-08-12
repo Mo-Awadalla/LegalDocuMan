@@ -116,7 +116,7 @@ class DateExtractor:
 
         dates_found = [k for k, v in metadata.items() if v is not None]
         if dates_found:
-            logging.info(f"📋 Backend tracking dates captured: {', '.join(dates_found)}")
+            logging.info("Document dates captured (count=%s)", len(dates_found))
         else:
             logging.warning("⚠️  No dates found for backend tracking")
 
