@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 pytestmark = pytest.mark.skipif(os.environ.get("RUN_REAL_E2E") != "1", reason="set RUN_REAL_E2E=1")
-BASE_URL = os.environ.get("E2E_BASE_URL", "http://localhost:3000")
+BASE_URL = os.environ.get("E2E_BASE_URL", "http://localhost:5000")
 API_KEY = os.environ.get("E2E_API_KEY", "change-me-in-production")
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 

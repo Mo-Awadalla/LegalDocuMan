@@ -25,15 +25,15 @@ jobs:
         run: >-
           docker compose exec -T -e RUN_REAL_E2E=1 -e E2E_BASE_URL=http://localhost:5000
           -e E2E_API_KEY=change-me-in-production app pytest -q tests/e2e/test_real_pipeline.py
-      - name: Workhorse SIGKILL and supervisor restart recovery
+      - name: Worker SIGKILL and supervisor restart recovery
         run: python3 scripts/test_sigkill_recovery.py --configured-concurrency 2
       - name: Queue drain 10/50/100
         run: |
           mkdir -p benchmarks/raw
           for size in 10 50 100; do
-            python3 scripts/benchmark_pipeline.py --base-url http://localhost:3000 \
+            python3 scripts/benchmark_pipeline.py --base-url http://localhost:5000 \
               --batch-size "$size" --configured-concurrency 2 \
-              --revision "${GITHUB_SHA}" --image-digest "$(docker inspect --format='{{.Image}}' legaldocuman-app-1)" \
+              --revision "${GITHUB_SHA}" --image-digest "$(docker inspect --format='{{.Image}}' "$(docker compose ps -q app)")" \
               --output "benchmarks/raw/nightly-two-workers-${size}.json"
           done
       - if: always()

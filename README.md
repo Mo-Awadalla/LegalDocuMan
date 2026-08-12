@@ -39,6 +39,10 @@ curl http://localhost:5000/api/v1/jobs/<job_id>
 - **PostgreSQL persistence** — all document records stored with checksum, file size, and full metadata
 - **Docker-ready** — single `docker compose up` spins up the app + database
 
+## Benchmarks
+
+The repository includes an external API-to-worker benchmark for the pre-upgrade single-worker revision and the current bounded worker pipeline. See [benchmarks/README.md](benchmarks/README.md) for the same-host procedure, correctness criteria, raw JSON schema, and pending measured comparison. Throughput numbers are intentionally not claimed until the complete baseline/one-worker/two-worker matrix has been measured on one host.
+
 ## Manual Install
 
 ```bash
@@ -312,6 +316,8 @@ LegalDocuMan/
 │       └── worker.py           # Background document processor
 ├── models/                    # RF-DETR checkpoint
 ├── tests/                     # Pytest suite
+├── benchmarks/                # Reproducible benchmark procedure and raw JSON
+├── scripts/benchmark_pipeline.py # External HTTP benchmark driver
 ├── Dockerfile                 # Container definition
 ├── docker-compose.yml         # App + PostgreSQL orchestration
 ├── .env.example               # Env var template
@@ -330,7 +336,7 @@ Coverage report:
 pytest tests/ --cov=legaldocuman --cov-report=term-missing
 ```
 
-All tests mock heavy dependencies (Tesseract, pdfplumber, PIL) so they run fast without system installs. See [Known Limitations](#known-limitations) for integration test status.
+The default suite keeps unit tests fast, while `tests/e2e/test_real_pipeline.py` exercises real HTTP, PostgreSQL, Redis/RQ, Tesseract, Poppler, RF-DETR, storage, metadata, and downloads when `RUN_REAL_E2E=1`. Nightly workflows add worker-loss recovery and 10/50/100-document queue drains. See [benchmarks/README.md](benchmarks/README.md) for performance runs.
 
 ### Optional frontend Playwright e2e smoke
 
