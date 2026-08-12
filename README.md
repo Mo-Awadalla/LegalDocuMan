@@ -106,6 +106,28 @@ JOB_BACKEND=rq gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 12
 AUTO_CREATE_DB=0 python -m legaldocuman.app.worker
 ```
 
+The worker command is a supervisor. It keeps exactly `WORKER_CONCURRENCY` RQ workers alive (default `2`), preloads one RF-DETR intake pipeline in each worker, enables the RQ scheduler, and restarts workers that exit unexpectedly. Jobs have three total attempts with 10- and 60-second retry delays and a default 900-second timeout.
+
+### Job recovery and operations
+
+Durable jobs move through `pending → queued → processing → completed`. A typed transient storage, connection, or timeout failure moves `processing → retry_scheduled → queued`; corrupt documents and deterministic extraction errors move directly to `failed`. Processing attempts heartbeat every 15 seconds and own a 90-second fenced lease. Reconciliation repairs committed-but-not-enqueued jobs and recovers expired leases without creating a second result artifact.
+
+The uploaded source remains immutable in `source_storage_key`. Results publish separately to a deterministic document-ID location in `result_storage_key`; `stored_path` continues to point to the downloadable file for API compatibility. Duplicate uploads remain distinct documents, while duplicate execution of one job is idempotent.
+
+Operational commands:
+
+```bash
+flask --app run.py jobs reconcile
+flask --app run.py jobs retry <failed-job-id>
+flask --app run.py jobs health
+```
+
+Admins can also redrive a failed job with `POST /api/v1/jobs/<id>/retry`. The child inherits the correlation ID and retains its parent link. Repeating the request returns the existing active child. `GET /api/v1/jobs/<id>` includes queue/retry timing, failure kind, RQ ID, total duration, lineage, and ordered attempt history.
+
+`/healthz` is dependency-free process liveness. `/readyz` checks PostgreSQL, Redis, writable storage, and a current worker heartbeat advertising OCR and signature capabilities. `/metrics` exposes PostgreSQL/Redis-derived Prometheus queue depth, scheduled depth, active jobs, configured/ready workers, duration histogram, retries, and cumulative terminal outcomes. Metric labels deliberately exclude tenants, filenames, document IDs, and correlation IDs.
+
+Logs are JSON on stdout for job lifecycle events and carry only low-risk identifiers and execution telemetry; document text, party names, credentials, and full paths are excluded.
+
 The Docker image defaults to `gunicorn` instead of Flask's development server. `docker compose up --build` also runs the database migration before starting `gunicorn`, and disables startup table creation in the app and worker containers with `AUTO_CREATE_DB=0`.
 
 ### Customer-readiness features
@@ -379,21 +401,11 @@ This system was productized from a script originally built for processing large 
 | `tied_to_parent` | Amendment | Same as parent |
 | `review_required` | Unknown / uncategorized | Manual review |
 
-## Further Improvements
-
-The following are planned enhancements not yet implemented:
-
-1. **In-file rename support** — Currently the system extracts metadata and reports it via the API, but does not rename the uploaded file on disk. A post-processing step should rename the file to its generated filename (e.g. `K_VendorName_MasterServiceAgreement_001.pdf`) and update `stored_path` in the database accordingly.
-
-2. **Front-end refinements** — The Flask web UI (upload form, job list, job detail) is functional but minimal. Areas for improvement: drag-and-drop file upload, real-time job status polling via SSE or WebSocket, batch upload with per-file status feedback, and a dashboard summary view (total processed, breakdown by document type, execution status pie chart).
-
-3. **Async / threaded batch processing** — The `process_document_async` worker runs synchronously per document. RF-DETR inference is the slowest step in the pipeline, and sequential processing means large batches (100+ files) can take minutes. Thread-based or `asyncio`-based concurrency — with a worker pool bounded by CPU/GPU cores or a configurable concurrency limit — would significantly improve throughput for bulk uploads.
-
 ## Known Limitations
 
 - **Execution status detection combines regex + visual ML** — The system uses two signals: (1) deterministic regex scans extracted text for execution-language keywords ("in witness whereof", signature blocks, e-signature platform markers) to classify a document as executed or supporting, and (2) RF-DETR (a fine-tuned computer vision model) detects handwritten signature strokes in document images for a second confidence layer. RF-DETR requires the checkpoint at `models/checkpoint_best_total.pth` — if unavailable the system falls back to regex-only mode. The regex layer cannot distinguish between a draft that mentions signatures and a fully executed contract; visual detection helps close that gap but is not definitive on its own.
 
-- **Unit tests only, no integration tests** — The test suite mocks all external dependencies (pdfplumber, Tesseract, PIL, dateparser). This means the tests verify internal logic but do not verify that the system works end-to-end with real PDFs or DOCX files on your machine. Integration tests (creating real documents and running the full pipeline) are the next step.
+- **CPU model cost** — Real integration tests use Tesseract, Poppler, and RF-DETR and are intentionally separated from the fast unit lane. Nightly recovery/load tests can take substantially longer on CPU-only runners.
 
 - **NVIDIA backend is a stub** — The `NvidiaOCRBackend` class has the interface wired but the actual API calls are not implemented. Fill in `image_to_text()` and `pdf_to_text()` with your NVIDIA API client when ready.
 

@@ -95,7 +95,7 @@ class SmallLMModel:
             self._tokenizer = AutoTokenizer.from_pretrained(checkpoint)
             self._model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
             self._model.eval()
-            logging.info(f"SmallLMModel loaded from {checkpoint}")
+            logging.info("Small language model loaded")
         except Exception as exc:
             self._load_error = f"Failed to load small LM from {checkpoint}: {exc}"
             logging.error(self._load_error)

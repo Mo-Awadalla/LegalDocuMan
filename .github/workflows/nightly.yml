@@ -1,0 +1,47 @@
+name: Nightly recovery and load
+
+on:
+  schedule:
+    - cron: "20 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  recovery-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: legaldocuman:ci
+          cache-from: type=gha,scope=legaldocuman-rfdetr
+          cache-to: type=gha,mode=max,scope=legaldocuman-rfdetr
+      - run: LEGALDOCUMAN_IMAGE=legaldocuman:ci docker compose up -d --no-build --wait
+      - run: docker compose exec -T app pytest -q tests/integration/test_job_reliability.py
+      - name: Real OCR/RF-DETR smoke
+        run: >-
+          docker compose exec -T -e RUN_REAL_E2E=1 -e E2E_BASE_URL=http://localhost:5000
+          -e E2E_API_KEY=change-me-in-production app pytest -q tests/e2e/test_real_pipeline.py
+      - name: Workhorse SIGKILL and supervisor restart recovery
+        run: python3 scripts/test_sigkill_recovery.py --configured-concurrency 2
+      - name: Queue drain 10/50/100
+        run: |
+          mkdir -p benchmarks/raw
+          for size in 10 50 100; do
+            python3 scripts/benchmark_pipeline.py --base-url http://localhost:3000 \
+              --batch-size "$size" --configured-concurrency 2 \
+              --revision "${GITHUB_SHA}" --image-digest "$(docker inspect --format='{{.Image}}' legaldocuman-app-1)" \
+              --output "benchmarks/raw/nightly-two-workers-${size}.json"
+          done
+      - if: always()
+        run: mkdir -p artifacts && docker compose logs --no-color > artifacts/docker.log && cp -R benchmarks/raw artifacts/ || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-recovery-load
+          path: artifacts
+      - if: always()
+        run: docker compose down -v

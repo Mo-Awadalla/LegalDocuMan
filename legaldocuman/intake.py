@@ -126,10 +126,7 @@ class DocumentIntake:
             date_str = self.date_extractor.extract_date_from_text(text_content, filename)
             date_metadata = self.date_extractor.extract_dates_with_metadata(text_content)
 
-            logging.info(
-                f"Intake analysis complete: {filename} "
-                f"(vendor={vendor_name}, type={doc_type}, status={status})"
-            )
+            logging.info("Intake analysis complete (type=%s, status=%s)", doc_type, status)
 
             return DocumentRecord(
                 vendor=vendor_name,
@@ -143,7 +140,7 @@ class DocumentIntake:
             )
 
         except Exception as e:
-            logging.error(f"Intake analysis failed for {filename}: {e}")
+            logging.error("Intake analysis failed (error_type=%s)", e.__class__.__name__)
             return DocumentRecord(
                 vendor="",
                 clean_vendor="",

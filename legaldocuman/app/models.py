@@ -18,6 +18,7 @@ class DocumentJobStatus(str, enum.Enum):
     PENDING = "pending"
     QUEUED = "queued"
     PROCESSING = "processing"
+    RETRY_SCHEDULED = "retry_scheduled"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -88,6 +89,8 @@ class Document(db.Model):
     stored_path = db.Column(db.String(1000), nullable=False)
     storage_backend = db.Column(db.String(50), default="local", nullable=False)
     storage_key = db.Column(db.String(1000))
+    source_storage_key = db.Column(db.String(1000))
+    result_storage_key = db.Column(db.String(1000))
     file_size = db.Column(db.Integer)
     checksum = db.Column(db.String(64))
     status = db.Column(db.Enum(DocumentStatus, create_type=False), default=DocumentStatus.PENDING, nullable=False)
@@ -180,11 +183,21 @@ class DocumentJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False, index=True)
     tenant_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True, index=True)
-    status = db.Column(db.Enum(DocumentJobStatus, create_type=False), default=DocumentJobStatus.PENDING, nullable=False)
+    status = db.Column(
+        db.Enum(DocumentJobStatus, create_type=False), default=DocumentJobStatus.PENDING, nullable=False, index=True
+    )
     backend = db.Column(db.String(50), nullable=False)
     attempts = db.Column(db.Integer, default=0, nullable=False)
     max_attempts = db.Column(db.Integer, default=3, nullable=False)
     last_error = db.Column(db.Text)
+    failure_kind = db.Column(db.String(100))
+    correlation_id = db.Column(db.String(100), nullable=False, index=True)
+    rq_job_id = db.Column(db.String(200), unique=True)
+    parent_job_id = db.Column(db.Integer, db.ForeignKey("document_jobs.id"), nullable=True)
+    queued_at = db.Column(db.DateTime)
+    retry_at = db.Column(db.DateTime, index=True)
+    heartbeat_at = db.Column(db.DateTime)
+    lease_token = db.Column(db.String(64))
     started_at = db.Column(db.DateTime)
     finished_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
@@ -192,3 +205,30 @@ class DocumentJob(db.Model):
 
     document = db.relationship("Document", backref="jobs")
     tenant = db.relationship("Tenant")
+    parent_job = db.relationship("DocumentJob", remote_side=[id], backref="redrives")
+    attempt_history = db.relationship(
+        "DocumentJobAttempt", back_populates="job", order_by="DocumentJobAttempt.attempt_number",
+        cascade="all, delete-orphan",
+    )
+
+
+class DocumentJobAttempt(db.Model):
+    __tablename__ = "document_job_attempts"
+    __table_args__ = (db.UniqueConstraint("job_id", "attempt_number", name="uq_job_attempt_number"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("document_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempt_number = db.Column(db.Integer, nullable=False)
+    worker_name = db.Column(db.String(200))
+    status = db.Column(db.String(50), nullable=False)
+    lease_token = db.Column(db.String(64), nullable=False)
+    started_at = db.Column(db.DateTime, nullable=False)
+    heartbeat_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    duration_ms = db.Column(db.Integer)
+    retryable = db.Column(db.Boolean)
+    error_code = db.Column(db.String(100))
+    error_message = db.Column(db.String(500))
+    termination_reason = db.Column(db.String(100))
+
+    job = db.relationship("DocumentJob", back_populates="attempt_history")

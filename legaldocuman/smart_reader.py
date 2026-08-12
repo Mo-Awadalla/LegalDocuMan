@@ -82,7 +82,7 @@ class SmartReader:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     text = f.read()[:self.cfg.TXT_OUTPUT_LIMIT]
             except Exception as exc:
-                logging.debug(f"TXT read failed for {file_path}: {exc}")
+                logging.debug("TXT read failed (error_type=%s)", exc.__class__.__name__)
                 return "", False, 0
             return text, self._has_region(text), 0
         return "", False, 0
@@ -148,7 +148,7 @@ class SmartReader:
         try:
             return page_num, ocr(image) or ""
         except Exception as exc:
-            logging.debug(f"OCR failed on page {page_num} of {file_path}: {exc}")
+            logging.debug("OCR failed on page %s (error_type=%s)", page_num, exc.__class__.__name__)
             return page_num, ""
 
     @staticmethod

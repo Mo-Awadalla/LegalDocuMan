@@ -1,0 +1,39 @@
+name: Manual benchmark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        concurrency: [1, 2]
+        batch: [10, 50, 100]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      WORKER_CONCURRENCY: ${{ matrix.concurrency }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: legaldocuman:ci
+          cache-from: type=gha,scope=legaldocuman-rfdetr
+          cache-to: type=gha,mode=max,scope=legaldocuman-rfdetr
+      - run: LEGALDOCUMAN_IMAGE=legaldocuman:ci docker compose up -d --no-build --wait
+      - run: >-
+          python3 scripts/benchmark_pipeline.py --base-url http://localhost:3000
+          --batch-size ${{ matrix.batch }} --configured-concurrency ${{ matrix.concurrency }}
+          --revision ${{ github.sha }} --image-digest "$(docker inspect --format='{{.Image}}' legaldocuman-app-1)"
+          --output benchmarks/raw/run-${{ matrix.concurrency }}-${{ matrix.batch }}.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.concurrency }}-${{ matrix.batch }}
+          path: benchmarks/raw
+      - if: always()
+        run: docker compose down -v
