@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.request
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 
@@ -35,10 +36,12 @@ def parse_bytes(value):
 def monitor_containers(stop, samples):
     while not stop.wait(1):
         try:
-            output = subprocess.check_output(
-                ["docker", "compose", "stats", "--no-stream", "--format", "json", "app", "worker"], text=True
-            )
-            rows = [json.loads(line) for line in output.splitlines() if line.strip()]
+            rows = []
+            for service in ("app", "worker"):
+                output = subprocess.check_output(
+                    ["docker", "compose", "stats", "--no-stream", "--format", "json", service], text=True
+                )
+                rows.extend(json.loads(line) for line in output.splitlines() if line.strip())
             cpu = sum(float(row["CPUPerc"].rstrip("%")) for row in rows)
             rss = sum(parse_bytes(row["MemUsage"].split("/")[0].strip()) for row in rows)
             samples.append((cpu, rss))
@@ -58,6 +61,28 @@ def dependency_versions():
         ))
     except (FileNotFoundError, subprocess.SubprocessError, json.JSONDecodeError):
         return {"python": platform.python_version()}
+
+
+def processing_seconds(job):
+    """Read processing time from both the baseline and durable-job APIs."""
+    attempts = job.get("attempt_history")
+    if attempts is not None:
+        return sum((attempt.get("duration_ms") or 0) for attempt in attempts) / 1000
+    if job.get("started_at") and job.get("finished_at"):
+        started = datetime.fromisoformat(job["started_at"].replace("Z", "+00:00"))
+        finished = datetime.fromisoformat(job["finished_at"].replace("Z", "+00:00"))
+        return max(0.0, (finished - started).total_seconds())
+    return 0.0
+
+
+def result_identity(job):
+    """Return the strongest result identity exposed by the target revision."""
+    document = job["document"]
+    return (
+        document.get("result_storage_key")
+        or document.get("generated_filename")
+        or f"document-{document['id']}"
+    )
 
 
 class Client:
@@ -81,6 +106,14 @@ class Client:
             "Content-Type: application/pdf\r\n\r\n"
         ).encode() + path.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
         return self.call("/api/v1/upload", "POST", body, f"multipart/form-data; boundary={boundary}")
+
+    def download(self, document_id):
+        request = urllib.request.Request(
+            self.base_url + f"/api/v1/documents/{document_id}/download",
+            headers={"X-API-Key": self.api_key, "X-Correlation-ID": str(uuid.uuid4())},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
 
 
 def wait_batch(client, jobs, timeout):
@@ -108,7 +141,7 @@ def wait_batch(client, jobs, timeout):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://localhost:3000")
+    parser.add_argument("--base-url", default="http://localhost:5000")
     parser.add_argument("--api-key", default=os.environ.get("E2E_API_KEY", "change-me-in-production"))
     parser.add_argument("--batch-size", type=int, choices=(10, 50, 100), required=True)
     parser.add_argument("--configured-concurrency", type=int, required=True)
@@ -138,12 +171,22 @@ def main():
     drain_seconds = time.monotonic() - batch_started
     monitor_stop.set()
     monitor.join(timeout=2)
+    if not resource_samples:
+        raise RuntimeError("no Docker resource samples were collected for app and worker")
 
     successful = [job for job in results if job["status"] == "completed"]
-    processing = [sum((attempt.get("duration_ms") or 0) for attempt in job["attempt_history"]) / 1000 for job in results]
+    processing = [processing_seconds(job) for job in results]
     e2e = [job["end_to_end_seconds"] for job in results]
-    result_keys = [job["document"]["result_storage_key"] for job in successful]
-    retries = sum(max(0, len(job["attempt_history"]) - 1) for job in results)
+    result_keys = [result_identity(job) for job in successful]
+    retries = sum(max(0, len(job.get("attempt_history", [])) - 1) for job in results)
+    download_failures = []
+    for job in successful:
+        try:
+            content = client.download(job["document"]["id"])
+            if not content.startswith(b"%PDF"):
+                download_failures.append({"document_id": job["document"]["id"], "error": "invalid_pdf"})
+        except Exception as exc:
+            download_failures.append({"document_id": job["document"]["id"], "error": exc.__class__.__name__})
     report = {
         "revision": args.revision or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "image_digest": args.image_digest,
@@ -160,23 +203,26 @@ def main():
         "processing_latency_seconds": {"average": statistics.mean(processing), "p95": percentile(processing, 0.95)},
         "end_to_end_latency_seconds": {"average": statistics.mean(e2e), "p95": percentile(e2e, 0.95)},
         "cpu_percent": {
-            "average": statistics.mean(sample[0] for sample in resource_samples) if resource_samples else None,
-            "peak": max((sample[0] for sample in resource_samples), default=None),
+            "average": statistics.mean(sample[0] for sample in resource_samples),
+            "peak": max(sample[0] for sample in resource_samples),
         },
         "rss_bytes": {
-            "average": statistics.mean(sample[1] for sample in resource_samples) if resource_samples else None,
-            "peak": max((sample[1] for sample in resource_samples), default=None),
+            "average": statistics.mean(sample[1] for sample in resource_samples),
+            "peak": max(sample[1] for sample in resource_samples),
         },
         "retries": retries,
         "failures": len(results) - len(successful),
         "queue_drain_seconds": drain_seconds,
         "maximum_observed_concurrency": maximum_active,
         "unique_result_count": len(set(result_keys)),
+        "downloadable_result_count": len(successful) - len(download_failures),
+        "download_failures": download_failures,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
-    if report["failures"] or len(result_keys) != len(set(result_keys)) or maximum_active > args.configured_concurrency:
+    if (report["failures"] or download_failures or len(result_keys) != len(set(result_keys))
+            or maximum_active > args.configured_concurrency):
         raise SystemExit(1)
 
 

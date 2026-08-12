@@ -1,4 +1,4 @@
-"""Nightly destructive-in-container recovery scenario for the RQ supervisor."""
+"""Nightly destructive-in-container worker-loss scenario for the RQ supervisor."""
 import argparse
 import json
 import subprocess
@@ -27,7 +27,7 @@ def kill_in_worker(pid):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://localhost:3000")
+    parser.add_argument("--base-url", default="http://localhost:5000")
     parser.add_argument("--api-key", default="change-me-in-production")
     parser.add_argument("--configured-concurrency", type=int, default=2)
     args = parser.parse_args()
@@ -35,17 +35,20 @@ def main():
     fixture = Path(__file__).parents[1] / "tests/fixtures/Synthetic_Acme_LLC_scanned_signed_MSA.pdf"
     uploaded = client.upload(fixture)
     deadline = time.monotonic() + 300
-    horse = None
+    victim = None
     while time.monotonic() < deadline:
         job = client.call(f"/api/v1/jobs/{uploaded['job_id']}")
-        horses = worker_pids("horse_pid")
-        if job["status"] == "processing" and horses:
-            horse = horses[0]
-            break
+        attempts = job.get("attempt_history") or []
+        worker_name = attempts[-1].get("worker") if attempts else None
+        if job["status"] == "processing" and worker_name:
+            candidate = worker_name.rsplit(":", 1)[-1]
+            if candidate.isdigit():
+                victim = int(candidate)
+                break
         time.sleep(0.5)
-    if not horse:
-        raise RuntimeError("No active RQ workhorse observed")
-    kill_in_worker(horse)
+    if not victim:
+        raise RuntimeError("No active RQ worker observed")
+    kill_in_worker(victim)
     results, _ = wait_batch(client, {uploaded["job_id"]: time.monotonic()}, 900)
     recovered = results[0]
     if recovered["status"] != "completed" or len(recovered["attempt_history"]) < 2:
@@ -60,9 +63,10 @@ def main():
     kill_in_worker(pids[0])
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
-        if len(worker_pids("pid")) >= args.configured_concurrency:
+        ready_pids = worker_pids("pid")
+        if len(ready_pids) >= args.configured_concurrency:
             print(json.dumps({"job_id": recovered["id"], "attempts": len(recovered["attempt_history"]),
-                              "ready_workers": len(worker_pids("pid"))}))
+                              "ready_workers": len(ready_pids)}))
             return
         time.sleep(1)
     raise RuntimeError("Supervisor did not restore configured worker concurrency")
