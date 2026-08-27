@@ -35,6 +35,7 @@ class FakeIntake:
 
 def make_app(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'jobs.db'}")
+    monkeypatch.setenv("AUTO_CREATE_DB", "1")
     monkeypatch.setenv("UPLOAD_FOLDER", str(tmp_path / "uploads"))
     monkeypatch.setenv("PROCESSED_FOLDER", str(tmp_path / "processed"))
     monkeypatch.setenv("JOB_BACKEND", "sync")
