@@ -8,6 +8,8 @@ on:
 jobs:
   recovery-load:
     runs-on: ubuntu-latest
+    env:
+      RATE_LIMIT_UPLOAD_PER_MINUTE: "1000"
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
