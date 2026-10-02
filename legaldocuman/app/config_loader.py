@@ -48,10 +48,15 @@ def init_app_config(app):
     app.config["MAX_UPLOAD_MB"] = int(os.environ.get("MAX_UPLOAD_MB", "20"))
     app.config["MAX_CONTENT_LENGTH"] = app.config["MAX_UPLOAD_MB"] * 1024 * 1024
     app.config["ALLOWED_EXTENSIONS"] = set(cfg.SUPPORTED_EXTENSIONS)
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    database_url = os.environ.get(
         "DATABASE_URL",
         "postgresql://postgres:***@localhost:5432/legaldocuman",
     )
+    # SQLAlchemy 2.1 defaults bare PostgreSQL URLs to psycopg 3, but the
+    # application installs psycopg2-binary. Preserve explicit driver choices.
+    if database_url.startswith("postgresql://"):
+        database_url = "postgresql+psycopg2://" + database_url[len("postgresql://"):]
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["API_KEY"] = os.environ.get("API_KEY", "")
     app.config["AUTH_TOKEN_TTL_SECONDS"] = int(os.environ.get("AUTH_TOKEN_TTL_SECONDS", "86400"))
