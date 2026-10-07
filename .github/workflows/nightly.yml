@@ -1,13 +1,21 @@
 name: Nightly recovery and load
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/ci.yml
+      - .github/workflows/nightly.yml
+      - requirements.txt
   schedule:
     - cron: "20 4 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   recovery-load:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       RATE_LIMIT_UPLOAD_PER_MINUTE: "1000"
     timeout-minutes: 180
