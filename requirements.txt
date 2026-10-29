@@ -14,7 +14,7 @@ python-dotenv>=1.0.0,<2.0.0
 # See README for OS-specific install instructions.
 pytesseract>=0.3.10,<1.0.0
 pdf2image>=1.0.0,<2.0.0
-Pillow>=12.3.0,<13.0.0
+Pillow>=13.0.0,<14.0.0
 
 # Web application
 Flask>=3.0.0,<4.0.0
